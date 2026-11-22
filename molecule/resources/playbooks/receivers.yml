@@ -2,6 +2,20 @@
 # role: rsyslog
 # file: molecule/resources/playbooks/receivers.yml
 
+- name: RSYSLOG | Prepare the GitHub-hosted runner for guest daemons
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    # Rootless containers inherit the runner's executable attachment for /usr/sbin/rsyslogd.
+    - name: RSYSLOG | Unload the runner's rsyslog profile before starting guest services
+      become: true
+      become_user: root
+      ansible.builtin.command:
+        cmd: apparmor_parser --remove /etc/apparmor.d/usr.sbin.rsyslogd
+        removes: /sys/kernel/security/apparmor/policy/profiles/rsyslogd.*
+      when: lookup('ansible.builtin.env', 'RUNNER_ENVIRONMENT') == 'github-hosted'
+
 - name: RSYSLOG | Refresh package metadata
   ansible.builtin.import_playbook: prepare.yml
 
