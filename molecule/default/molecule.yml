@@ -28,6 +28,7 @@ provisioner:
     prepare: "../resources/playbooks/receivers.yml"
     converge: "../resources/playbooks/converge.yml"
     verify: "../resources/playbooks/verify.yml"
+    cleanup: "../resources/playbooks/diagnostics.yml"
     side_effect: "../resources/playbooks/side_effect.yml"
 verifier:
   name: "ansible"

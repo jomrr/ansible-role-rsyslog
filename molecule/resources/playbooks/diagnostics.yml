@@ -1,0 +1,41 @@
+---
+# role: rsyslog
+# file: molecule/resources/playbooks/diagnostics.yml
+
+- name: RSYSLOG | Diagnose a failed Molecule run
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: RSYSLOG | Read sender and collector events from the current boot
+      become: true
+      become_user: root
+      ansible.builtin.command: >-
+        journalctl -b --no-pager -o short-precise -n 80
+        -u rsyslog.service -u molecule-syslog-tls.service
+        -u molecule-syslog-mtls.service -u molecule-syslog-tcp.service
+      register: __rsyslog_unit_events
+      changed_when: false
+
+    - name: RSYSLOG | Show sender and collector events
+      ansible.builtin.debug:
+        var: __rsyslog_unit_events.stdout_lines
+
+- name: RSYSLOG | Diagnose host kernel denials on GitHub runners
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: RSYSLOG | Inspect rsyslog audit events on the runner
+      when: lookup('ansible.builtin.env', 'GITHUB_ACTIONS') == 'true'
+      block:
+        - name: RSYSLOG | Read kernel events involving rsyslog
+          become: true
+          become_user: root
+          ansible.builtin.command: journalctl -b -k --no-pager -o cat -n 40 --grep=rsyslog
+          register: __rsyslog_kernel_events
+          changed_when: false
+          failed_when: __rsyslog_kernel_events.rc not in [0, 1]
+
+        - name: RSYSLOG | Show runner kernel events
+          ansible.builtin.debug:
+            var: __rsyslog_kernel_events.stdout_lines
