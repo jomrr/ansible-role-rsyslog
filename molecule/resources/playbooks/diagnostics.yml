@@ -20,13 +20,13 @@
       ansible.builtin.debug:
         var: __rsyslog_unit_events.stdout_lines
 
-- name: RSYSLOG | Diagnose host kernel denials on GitHub runners
+- name: RSYSLOG | Diagnose host kernel denials on GitHub-hosted runners
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
     - name: RSYSLOG | Inspect rsyslog audit events on the runner
-      when: lookup('ansible.builtin.env', 'GITHUB_ACTIONS') == 'true'
+      when: lookup('ansible.builtin.env', 'RUNNER_ENVIRONMENT') == 'github-hosted'
       block:
         - name: RSYSLOG | Read kernel events involving rsyslog
           become: true
