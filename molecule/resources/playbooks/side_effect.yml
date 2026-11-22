@@ -1,0 +1,34 @@
+---
+# role: rsyslog
+# file: molecule/resources/playbooks/side_effect.yml
+
+- name: RSYSLOG | Change forwarding transport and add a late-created file
+  hosts: all
+  gather_facts: true
+  vars:
+    rsyslog_port: 15514
+    rsyslog_transport: tcp
+    rsyslog_additional_files: [/var/log/molecule-extra.log]
+  tasks:
+    - name: RSYSLOG | Apply the new destination and input
+      ansible.builtin.include_role:
+        name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+
+    - name: RSYSLOG | Activate the new sender configuration
+      ansible.builtin.meta: flush_handlers
+
+    - name: RSYSLOG | Create the configured file after the daemon has restarted
+      become: true
+      become_user: root
+      ansible.builtin.copy:
+        dest: /var/log/molecule-extra.log
+        content: "late-file-probe\n"
+        mode: '0644'
+
+    - name: RSYSLOG | Wait for the new file record at the TCP collector
+      become: true
+      become_user: root
+      ansible.builtin.wait_for:
+        path: /var/log/molecule-collector-tcp
+        search_regex: '(?m)^<134>1 \S+ \S+ molecule-extra\.log - - - late-file-probe$'
+        timeout: 60

@@ -1,0 +1,86 @@
+---
+# role: rsyslog
+# file: tasks/main.yml
+
+- name: RSYSLOG | Load platform settings
+  ansible.builtin.include_vars: "{{ lookup('ansible.builtin.first_found', __rsyslog_platform_files) }}"
+  vars:
+    __rsyslog_platform_files:
+      files:
+        - "{{ ansible_facts.os_family }}.yml"
+      paths:
+        - "{{ role_path }}/vars"
+
+- name: RSYSLOG | Validate forwarding inputs
+  ansible.builtin.import_tasks: assert.yml
+
+- name: RSYSLOG | Install the forwarding packages
+  become: true
+  become_user: root
+  ansible.builtin.package:
+    name: "{{ ['rsyslog', __rsyslog_tls_package, 'ca-certificates'] if rsyslog_transport == 'tls' else ['rsyslog'] }}"
+    state: present
+
+- name: RSYSLOG | Grant the Ubuntu syslog account access to the journal
+  become: true
+  become_user: root
+  ansible.builtin.user:
+    name: syslog
+    groups: systemd-journal
+    append: true
+  when: ansible_facts.distribution == 'Ubuntu'
+  notify: restart rsyslog
+
+- name: RSYSLOG | Create the private directory for input positions and queued messages
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ __rsyslog_state_directory }}"
+    state: directory
+    owner: "{{ __rsyslog_state_owner }}"
+    group: "{{ __rsyslog_state_owner }}"
+    mode: '0700'
+
+- name: RSYSLOG | Permit the Ubuntu AppArmor profile to read sender inputs
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: apparmor-central.j2
+    dest: /etc/apparmor.d/rsyslog.d/central-forwarding
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  when: ansible_facts.distribution == 'Ubuntu'
+  notify: restart rsyslog
+
+- name: RSYSLOG | Install the native snippet validation helper
+  become: true
+  become_user: root
+  ansible.builtin.copy:
+    src: rsyslog-validate-snippet
+    dest: /usr/local/sbin/rsyslog-validate-snippet
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: RSYSLOG | Configure forwarding
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: central.conf.j2
+    dest: /etc/rsyslog.d/01-central.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+    validate: /usr/local/sbin/rsyslog-validate-snippet %s
+  notify: restart rsyslog
+
+- name: RSYSLOG | Enable and start rsyslog
+  become: true
+  become_user: root
+  ansible.builtin.systemd_service:
+    name: rsyslog.service
+    enabled: true
+    state: started

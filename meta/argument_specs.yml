@@ -1,0 +1,40 @@
+---
+# role: rsyslog
+# file: meta/argument_specs.yml
+
+argument_specs:
+  main:
+    short_description: Install rsyslog and forward local journal and file records.
+    options:
+      rsyslog_server:
+        type: str
+        required: true
+        description:
+          - DNS name or IP address of the collector. TLS verifies this identity against
+            its certificate.
+      rsyslog_port:
+        type: int
+        default: 6514
+        description:
+          - Destination port on the collector.
+      rsyslog_transport:
+        type: str
+        choices:
+          - tls
+          - tcp
+        default: tls
+        description:
+          - Send RFC 5424 messages over authenticated TLS or plain TCP.
+      rsyslog_ca_file:
+        type: path
+        default: ''
+        description:
+          - Absolute path to a readable PEM trust bundle on the sender. An empty value uses
+            the platform trust bundle.
+      rsyslog_additional_files:
+        type: list
+        elements: path
+        default: []
+        description:
+          - Active newline-delimited text logs to monitor in addition to the package manager
+            logs.

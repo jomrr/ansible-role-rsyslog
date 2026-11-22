@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+# The Ubuntu rsyslogd AppArmor profile permits configuration reads in this directory.
+candidate=$(mktemp /etc/rsyslog.d/.validate-XXXXXXXX)
+trap 'rm -f -- "$candidate"' EXIT
+cat -- "$1" > "$candidate"
+/usr/sbin/rsyslogd -N3 -f "$candidate"

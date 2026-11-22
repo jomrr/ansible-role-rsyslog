@@ -1,0 +1,64 @@
+---
+# role: rsyslog
+# file: molecule/resources/playbooks/receivers.yml
+
+- name: RSYSLOG | Refresh package metadata
+  ansible.builtin.import_playbook: prepare.yml
+
+- name: RSYSLOG | Prepare loopback collectors
+  hosts: all
+  gather_facts: true
+  vars:
+    __rsyslog_anchor_dirs:
+      Debian: /usr/local/share/ca-certificates
+      RedHat: /etc/pki/ca-trust/source/anchors
+      Suse: /etc/pki/trust/anchors
+  tasks:
+    - name: RSYSLOG | Install collector tools
+      become: true
+      become_user: root
+      ansible.builtin.package:
+        name: [socat, openssl, ca-certificates]
+        state: present
+
+    - name: RSYSLOG | Create a certificate for the TLS collector
+      become: true
+      become_user: root
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=localhost
+          -addext subjectAltName=DNS:localhost -keyout /run/rsyslog-collector.key
+          -out /run/rsyslog-collector.crt
+        creates: /run/rsyslog-collector.key
+
+    - name: RSYSLOG | Trust the test collector through the platform CA store
+      become: true
+      become_user: root
+      ansible.builtin.copy:
+        src: /run/rsyslog-collector.crt
+        remote_src: true
+        dest: "{{ __rsyslog_anchor_dirs[ansible_facts.os_family] }}/molecule-collector.crt"
+        mode: '0644'
+
+    - name: RSYSLOG | Refresh the platform CA bundle
+      become: true
+      become_user: root
+      ansible.builtin.command: "{{ 'update-ca-trust' if ansible_facts.os_family == 'RedHat' else 'update-ca-certificates' }}"
+      changed_when: true
+
+    - name: RSYSLOG | Start the TLS collector
+      become: true
+      become_user: root
+      ansible.builtin.command: >-
+        systemd-run --unit=molecule-syslog-tls socat -u
+        OPENSSL-LISTEN:6514,bind=127.0.0.1,reuseaddr,fork,verify=0,cert=/run/rsyslog-collector.crt,key=/run/rsyslog-collector.key
+        OPEN:/var/log/molecule-collector-tls,creat,append
+      changed_when: true
+
+    - name: RSYSLOG | Start the TCP collector
+      become: true
+      become_user: root
+      ansible.builtin.command: >-
+        systemd-run --unit=molecule-syslog-tcp socat -u TCP4-LISTEN:15514,bind=127.0.0.1,reuseaddr,fork
+        OPEN:/var/log/molecule-collector-tcp,creat,append
+      changed_when: true

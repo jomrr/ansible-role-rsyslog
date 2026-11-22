@@ -1,0 +1,35 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+
+{% if ansible_facts.os_family != 'RedHat' %}
+module(load="imjournal" StateFile="{{ __rsyslog_state_directory }}/imjournal.state"
+       PersistStateInterval="100")
+{% endif %}
+module(load="imfile" statefile.directory="{{ __rsyslog_state_directory }}")
+
+ruleset(name="central_forward") {
+    action(type="omfwd" target="{{ rsyslog_server }}" port="{{ rsyslog_port }}" protocol="tcp"
+           template="RSYSLOG_SyslogProtocol23Format"
+{% if rsyslog_transport == 'tls' %}
+           TCP_Framing="octet-counted"
+           StreamDriver="gtls" StreamDriverMode="1" StreamDriverAuthMode="x509/name"
+           StreamDriverPermittedPeers="{{ rsyslog_server }}"
+           StreamDriver.CAFile="{{ rsyslog_ca_file | default(__rsyslog_ca_bundle, true) }}"
+{% endif %}
+           action.resumeRetryCount="-1" queue.type="LinkedList" queue.filename="forward"
+           queue.spoolDirectory="{{ __rsyslog_state_directory }}"
+           queue.maxDiskSpace="256m" queue.saveOnShutdown="on")
+}
+
+if $inputname == "imjournal" then {
+    call central_forward
+{% if ansible_facts.os_family != 'RedHat' %}
+    # The distribution processes its local socket and kernel inputs separately.
+    stop
+{% endif %}
+}
+
+{% for path in (__rsyslog_platform_logs + rsyslog_additional_files) | unique(case_sensitive=true) %}
+input(type="imfile" File="{{ path }}" Tag="{{ path | basename }}:" Facility="local0"
+      Severity="info" PersistStateInterval="100" Ruleset="central_forward")
+{% endfor %}

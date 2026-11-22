@@ -1,0 +1,17 @@
+---
+# role: rsyslog
+# file: meta/main.yml
+
+galaxy_info:
+  author: Jonas Mauer
+  description: Forward the systemd journal and platform log files to a central syslog receiver.
+  galaxy_tags:
+    - rsyslog
+    - syslog
+    - logging
+    - systemd
+  issue_tracker_url: https://github.com/jomrr/ansible-role-rsyslog/issues
+  license: MIT
+  min_ansible_version: "2.22"
+  namespace: jomrr
+  role_name: rsyslog

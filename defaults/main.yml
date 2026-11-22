@@ -1,0 +1,21 @@
+---
+# role: rsyslog
+# file: defaults/main.yml
+
+# DNS name or IP address of the central syslog receiver.
+# rsyslog_server: logs.example.org
+
+# Transport used for forwarding to the receiver.
+# Choices: tls, tcp
+rsyslog_transport: tls
+
+# Listening port of the central syslog receiver.
+rsyslog_port: 6514
+
+# Absolute path to a PEM trust bundle, with an empty value using the distribution bundle.
+rsyslog_ca_file: ''
+
+# Additional newline-delimited text files to forward alongside the platform logs.
+rsyslog_additional_files: []
+# rsyslog_additional_files:
+#   - /var/log/myapp/events.log

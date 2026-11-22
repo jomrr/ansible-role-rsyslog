@@ -1,0 +1,13 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+
+@{run}/log/journal/** r,
+/var/log/ r,
+{% if rsyslog_transport == 'tls' %}
+include <abstractions/ssl_certs>
+"{{ rsyslog_ca_file | default(__rsyslog_ca_bundle, true) }}" r,
+{% endif %}
+{% for path in rsyslog_additional_files %}
+"{{ (path | dirname).rstrip('/') }}/" r,
+"{{ path }}" r,
+{% endfor %}

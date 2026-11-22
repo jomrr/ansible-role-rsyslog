@@ -1,0 +1,24 @@
+---
+# role: rsyslog
+# file: tasks/assert.yml
+
+- name: RSYSLOG | Check the destination and trust bundle
+  ansible.builtin.assert:
+    that:
+      - rsyslog_server is match('^[A-Za-z0-9:][A-Za-z0-9.:-]*\Z')
+      - rsyslog_port | int >= 1
+      - rsyslog_port | int <= 65535
+      - rsyslog_ca_file == '' or rsyslog_ca_file is match('^/[-A-Za-z0-9_./+]+\Z')
+    fail_msg: Supply a receiver hostname or address, a port from 1 to 65535 and an absolute PEM path if overriding the CA bundle.
+    quiet: true
+
+- name: RSYSLOG | Check additional text file paths
+  ansible.builtin.assert:
+    that:
+      - __rsyslog_path is match('^/([-A-Za-z0-9_.+]+/)*[-A-Za-z0-9_.+]+\Z')
+    fail_msg: Supply an absolute path to one active text log per entry.
+    quiet: true
+  loop: "{{ rsyslog_additional_files }}"
+  loop_control:
+    loop_var: __rsyslog_path
+    label: "{{ __rsyslog_path }}"

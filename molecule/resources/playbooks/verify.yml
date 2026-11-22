@@ -1,0 +1,50 @@
+---
+# role: rsyslog
+# file: molecule/resources/playbooks/verify.yml
+
+- name: RSYSLOG | Verify delivery to the TLS collector
+  hosts: all
+  gather_facts: true
+  vars:
+    __rsyslog_package_logs:
+      Debian: /var/log/dpkg.log
+      RedHat: "/var/log/{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf' }}.log"
+      Suse: /var/log/zypp/history
+  tasks:
+    - name: RSYSLOG | Validate the complete active configuration
+      become: true
+      become_user: root
+      ansible.builtin.command: rsyslogd -N1
+      changed_when: false
+
+    - name: RSYSLOG | Write a journal-only entry
+      ansible.builtin.command: systemd-cat --identifier=molecule-journal /bin/echo central-journal-probe
+      changed_when: true
+
+    - name: RSYSLOG | Append a distinct record to the platform package log
+      become: true
+      become_user: root
+      ansible.builtin.command:
+        cmd: dd status=none oflag=append conv=nocreat,notrunc of={{ __rsyslog_package_logs[ansible_facts.os_family] }}
+        stdin: central-package-probe
+      changed_when: true
+
+    - name: RSYSLOG | Check each TLS probe arrived once with its original tag
+      become: true
+      become_user: root
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -Ec
+          - '^([0-9]+) <[0-9]+>1 [^ ]+ [^ ]+ {{ __rsyslog_record }}$'
+          - /var/log/molecule-collector-tls
+      register: __rsyslog_received
+      changed_when: false
+      until: __rsyslog_received.stdout == '1'
+      retries: 30
+      delay: 2
+      loop:
+        - 'molecule-journal [0-9]+ - - central-journal-probe'
+        - '{{ __rsyslog_package_logs[ansible_facts.os_family] | basename | regex_escape }} - - - central-package-probe'
+      loop_control:
+        loop_var: __rsyslog_record
