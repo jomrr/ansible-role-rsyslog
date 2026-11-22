@@ -41,6 +41,14 @@
       RedHat: /etc/pki/ca-trust/source/anchors
       Suse: /etc/pki/trust/anchors
   tasks:
+    - name: RSYSLOG | Resolve the test receiver to its IPv4 loopback listener
+      become: true
+      become_user: root
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: '127.0.0.1 rsyslog-collector.test'
+        unsafe_writes: true  # Podman bind-mounts /etc/hosts.
+
     - name: RSYSLOG | Install collector tools
       become: true
       become_user: root
@@ -54,7 +62,7 @@
       ansible.builtin.command:
         cmd: >-
           openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=localhost
-          -addext subjectAltName=DNS:localhost -keyout /run/rsyslog-collector.key
+          -addext subjectAltName=DNS:localhost,DNS:rsyslog-collector.test -keyout /run/rsyslog-collector.key
           -out /run/rsyslog-collector.crt
         creates: /run/rsyslog-collector.key
 

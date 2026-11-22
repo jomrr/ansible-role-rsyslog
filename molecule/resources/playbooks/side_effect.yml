@@ -6,7 +6,7 @@
   hosts: all
   gather_facts: true
   vars:
-    rsyslog_server: localhost
+    rsyslog_server: rsyslog-collector.test
   roles:
     - role: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   post_tasks:
