@@ -16,6 +16,19 @@
         removes: /sys/kernel/security/apparmor/policy/profiles/rsyslogd.*
       when: lookup('ansible.builtin.env', 'RUNNER_ENVIRONMENT') == 'github-hosted'
 
+- name: RSYSLOG | Prepare the Tumbleweed package source
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: RSYSLOG | Fetch Tumbleweed OSS metadata and packages from the same openSUSE server
+      become: true
+      become_user: root
+      ansible.builtin.replace:
+        path: /etc/zypp/repos.d/repo-oss.repo
+        regexp: '^baseurl=https?://download\.opensuse\.org/tumbleweed/repo/oss/?$'
+        replace: 'baseurl=https://downloadcontent.opensuse.org/tumbleweed/repo/oss/'
+      when: ansible_facts.distribution == 'openSUSE Tumbleweed'
+
 - name: RSYSLOG | Refresh package metadata
   ansible.builtin.import_playbook: prepare.yml
 
