@@ -50,33 +50,8 @@ scenario:
     - "destroy"
   name: "default"
 platforms:
-  - name: "almalinux-latest-rsyslog"
-    image: "docker.io/jomrr/molecule-almalinux:latest"
-    pre_build_image: true
-    override_command: false
-    systemd: "true"
-  - name: "debian-latest-rsyslog"
-    image: "docker.io/jomrr/molecule-debian:latest"
-    pre_build_image: true
-    override_command: false
-    systemd: "true"
-  - name: "fedora-latest-rsyslog"
-    image: "docker.io/jomrr/molecule-fedora:latest"
-    pre_build_image: true
-    override_command: false
-    systemd: "true"
-  - name: "opensuse-leap-latest-rsyslog"
-    image: "docker.io/jomrr/molecule-opensuse-leap@sha256:d079aa14cdd7333dbe7eeff335d59fb5d269de05e9e7dc067c875d2cedd816c9"
-    pre_build_image: true
-    override_command: false
-    systemd: "true"
-  - name: "opensuse-tumbleweed-latest-rsyslog"
-    image: "docker.io/jomrr/molecule-opensuse-tumbleweed@sha256:e7c2ffd034e7abfba2efd21f9455c5292063db88787c1039716c34e8aadcb8f1"
-    pre_build_image: true
-    override_command: false
-    systemd: "true"
-  - name: "ubuntu-latest-rsyslog"
-    image: "docker.io/jomrr/molecule-ubuntu:latest"
+  - name: "rsyslog"
+    image: "docker.io/${uns:-jomrr}/molecule-${img:-fedora}:${tag:-latest}"
     pre_build_image: true
     override_command: false
     systemd: "true"
