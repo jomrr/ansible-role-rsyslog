@@ -29,11 +29,15 @@ ruleset(name="central_forward") {
 
 if $inputname == "imjournal" then {
     call central_forward
-{% if ansible_facts.os_family != 'RedHat' %}
+{% if ansible_facts.os_family != 'RedHat' and not (rsyslog_forward_only | bool) %}
     # The distribution processes its local socket and kernel inputs separately.
     stop
 {% endif %}
 }
+{% if rsyslog_forward_only | bool %}
+# Journal messages have already gone through the forwarding ruleset.
+*.* stop
+{% endif %}
 
 {% for input in __rsyslog_file_inputs | unique(attribute='path', case_sensitive=true) %}
 input(type="imfile" File="{{ input.path }}" Tag="{{ (input.tag | default(input.path | basename)).rstrip(':') }}:"

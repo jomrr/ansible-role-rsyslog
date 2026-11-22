@@ -33,6 +33,21 @@
         search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ molecule-journal \d+ - - central-journal-probe$'
         timeout: 45
 
+    - name: RSYSLOG | Send the control record to the distribution's local socket input
+      ansible.builtin.command:
+        cmd: socat -u STDIN UNIX-SENDTO:/run/systemd/journal/syslog
+        stdin: '<14>molecule-journal: central-journal-probe'
+      changed_when: true
+      when: ansible_facts.os_family != 'RedHat'
+
+    - name: RSYSLOG | Verify local file logging with default forwarding
+      become: true
+      become_user: root
+      ansible.builtin.wait_for:
+        path: "{{ '/var/log/syslog' if ansible_facts.os_family == 'Debian' else '/var/log/messages' }}"
+        search_regex: 'molecule-journal(?:\[\d+\])?: central-journal-probe'
+        timeout: 45
+
     - name: RSYSLOG | Check that debug and DNF records were excluded
       ansible.builtin.command:
         argv:
@@ -105,21 +120,40 @@
       changed_when: false
       failed_when: __rsyslog_notice.rc != 1
 
-- name: RSYSLOG | Change to plain TCP and select text log inputs
+- name: RSYSLOG | Buffer journal and file inputs on a pure TCP forwarder
   hosts: all
   gather_facts: true
   vars:
     rsyslog_server: 127.0.0.1
     rsyslog_transport: tcp
+    rsyslog_forward_only: true
     rsyslog_platform_files: [/var/log/molecule-platform.log]
     rsyslog_additional_files:
       - /var/log/molecule-extra.log
       - path: /var/log/molecule-app.log
         tag: myapp
         facility: local3
+  pre_tasks:
+    - name: RSYSLOG | Take the TCP collector offline
+      become: true
+      become_user: root
+      ansible.builtin.systemd_service:
+        name: molecule-syslog-tcp.service
+        state: stopped
   roles:
     - role: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   post_tasks:
+    - name: RSYSLOG | Write a journal record while the TCP collector is offline
+      ansible.builtin.command: systemd-cat -p info -t molecule-buffer /bin/echo offline-journal-probe
+      changed_when: true
+
+    - name: RSYSLOG | Send a separate record directly to the distribution's syslog socket
+      ansible.builtin.command:
+        cmd: socat -u STDIN UNIX-SENDTO:/run/systemd/journal/syslog
+        stdin: '<14>molecule-socket: offline-socket-probe'
+      changed_when: true
+      when: ansible_facts.os_family != 'RedHat'
+
     - name: RSYSLOG | Create selected text inputs after the daemon has restarted
       become: true
       become_user: root
@@ -130,6 +164,53 @@
       loop: [platform, extra, app]
       loop_control:
         loop_var: __rsyslog_source
+
+    - name: RSYSLOG | Stop the sender while the TCP collector is offline
+      become: true
+      become_user: root
+      ansible.builtin.systemd_service:
+        name: rsyslog.service
+        state: stopped
+
+    - name: RSYSLOG | Remove a consumed input so only the saved queue can deliver its record
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: /var/log/molecule-extra.log
+        state: absent
+
+    - name: RSYSLOG | Bring the TCP collector back online
+      become: true
+      become_user: root
+      ansible.builtin.systemd_service:
+        name: molecule-syslog-tcp.service
+        state: started
+
+    - name: RSYSLOG | Start the sender with its saved queue
+      become: true
+      become_user: root
+      ansible.builtin.systemd_service:
+        name: rsyslog.service
+        state: started
+
+    - name: RSYSLOG | Wait for the buffered journal record at the TCP collector
+      ansible.builtin.wait_for:
+        path: /var/log/molecule-collector-tcp
+        search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ molecule-buffer \d+ - - offline-journal-probe$'
+        timeout: 45
+
+    - name: RSYSLOG | Verify the journal and socket probes bypassed the distribution's local file
+      become: true
+      become_user: root
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -E
+          - 'molecule-(buffer|socket)(\[[0-9]+\])?: offline-(journal|socket)-probe'
+          - "{{ '/var/log/syslog' if ansible_facts.os_family == 'Debian' else '/var/log/messages' }}"
+      register: __rsyslog_local_probes
+      changed_when: false
+      failed_when: __rsyslog_local_probes.rc != 1
 
     - name: RSYSLOG | Verify octet-counted TCP records with default and custom file metadata
       ansible.builtin.wait_for:

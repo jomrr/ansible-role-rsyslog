@@ -77,10 +77,20 @@
         OPEN:/var/log/molecule-collector-tls,creat,append
       changed_when: true
 
+    - name: RSYSLOG | Install the restartable TCP collector for the outage test
+      become: true
+      become_user: root
+      ansible.builtin.copy:
+        dest: /run/systemd/system/molecule-syslog-tcp.service
+        mode: '0644'
+        content: |
+          [Service]
+          ExecStart=/usr/bin/socat -u TCP4-LISTEN:514,bind=127.0.0.1,reuseaddr,fork OPEN:/var/log/molecule-collector-tcp,creat,append
+
     - name: RSYSLOG | Start the TCP collector
       become: true
       become_user: root
-      ansible.builtin.command: >-
-        systemd-run --unit=molecule-syslog-tcp socat -u TCP4-LISTEN:514,bind=127.0.0.1,reuseaddr,fork
-        OPEN:/var/log/molecule-collector-tcp,creat,append
-      changed_when: true
+      ansible.builtin.systemd_service:
+        name: molecule-syslog-tcp.service
+        daemon_reload: true
+        state: started

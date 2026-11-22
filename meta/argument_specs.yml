@@ -12,6 +12,13 @@ argument_specs:
         description:
           - A receiver hostname or IP address enables forwarding. Omit the variable or supply
             an empty string for local operation.
+      rsyslog_forward_only:
+        type: bool
+        default: false
+        description:
+          - When forwarding is enabled, stop all messages in the default ruleset before
+            the distribution's local logging rules.
+          - The forwarding queue still buffers records when the receiver is offline.
       rsyslog_transport:
         type: str
         choices:

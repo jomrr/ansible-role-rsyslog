@@ -63,6 +63,20 @@ Type: `str`. Required: `false`.
 A receiver hostname or IP address enables forwarding. Omit the variable or
 supply an empty string for local operation.
 
+### `rsyslog_forward_only`
+
+Type: `bool`. Required: `false`.
+
+When forwarding is enabled, stop all messages in the default ruleset before the
+distribution's local logging rules.
+The forwarding queue still buffers records when the receiver is offline.
+
+Default:
+
+```yaml
+rsyslog_forward_only: false
+```
+
 ### `rsyslog_transport`
 
 Type: `str`. Required: `false`.
@@ -203,11 +217,18 @@ continues running with the local rules.
 
 ## Operational Notes
 
-- Journal forwarding uses imjournal directly, including when ForwardToSyslog is
-  disabled. On Red Hat systems, imjournal also feeds the distribution's local
-  rules. Files such as /var/log/messages and /var/log/secure can therefore
-  contain copies of persistent journal records. Adding those files as remote
-  inputs can duplicate events at the collector.
+- Journal forwarding uses imjournal directly, even with ForwardToSyslog
+  disabled. By default, Red Hat also writes journal events to files such as
+  /var/log/messages and /var/log/secure. Debian and Ubuntu can write copies from
+  socket and kernel inputs. Adding those files as forwarding inputs can
+  duplicate events at the collector.
+- Set `rsyslog_forward_only: true` together with `rsyslog_server` for a pure
+  forwarder. After journal forwarding, all messages in the default ruleset stop
+  before subsequent rules, including socket and kernel messages and records
+  below the forwarding severity threshold. Journald keeps its configured
+  retention. Selected text files still feed the forwarding queue, which buffers
+  undelivered records locally using the configured disk budget. Removing the
+  receiver restores the distribution's local logging.
 - File collection is opt-in on every platform. To forward DNF, APT or Zypper
   logs, list the active files in rsyslog_platform_files for the relevant
   inventory group. imfile assigns severity info; a threshold of notice or higher
@@ -253,6 +274,18 @@ continues running with the local rules.
   roles:
     - role: jomrr.rsyslog
       rsyslog_server: logs.example.org
+```
+
+### Use the journal as the local record and buffer remote delivery
+
+```yaml
+---
+- name: Configure a pure forwarder
+  hosts: all
+  roles:
+    - role: jomrr.rsyslog
+      rsyslog_server: logs.example.org
+      rsyslog_forward_only: true
 ```
 
 ### Authenticate a sender and select application logs

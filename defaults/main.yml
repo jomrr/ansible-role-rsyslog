@@ -5,6 +5,9 @@
 # Optional DNS name or IP address of the receiver that enables remote forwarding.
 # rsyslog_server: logs.example.org
 
+# Stop processing messages before the distribution's local rules when forwarding.
+rsyslog_forward_only: false
+
 # Transport used for forwarding to the receiver.
 # Choices: tls, tcp
 rsyslog_transport: tls
