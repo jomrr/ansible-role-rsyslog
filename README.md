@@ -6,38 +6,41 @@
 [![dev](https://img.shields.io/github/actions/workflow/status/jomrr/ansible-role-rsyslog/dev.yml?branch=dev&label=dev)](https://github.com/jomrr/ansible-role-rsyslog/actions/workflows/dev.yml?query=branch%3Adev)
 [![main](https://img.shields.io/github/actions/workflow/status/jomrr/ansible-role-rsyslog/main.yml?branch=main&label=main)](https://github.com/jomrr/ansible-role-rsyslog/actions/workflows/main.yml?query=branch%3Amain)
 
-Forward the systemd journal and platform log files to a central syslog receiver.
+Install and run rsyslog locally with optional forwarding to a central receiver.
 
 ## Purpose
 
-Forward the local systemd journal and text logs to a central syslog receiver.
-Set `rsyslog_server` to the collector's DNS name or IP address. The default is
-RFC 5424 over TLS on port 6514 with octet-counted framing and server certificate
-verification.
+Install rsyslog, enable the service at boot and run the distribution's local
+logging configuration. Set `rsyslog_server` to also forward the systemd journal
+to a collector. The sender uses TLS on port 6514 and verifies the receiver
+against the system trust store by default.
 
 ## Scope
 
 ### Managed
 
-- The rsyslog package, forwarding configuration, persistent sender state and
-  enabled rsyslog service.
-- Package manager logs on each platform: `/var/log/dpkg.log` and
-  `/var/log/apt/history.log` on Debian and Ubuntu, the active `/var/log/dnf.log`
-  or `/var/log/dnf5.log` on AlmaLinux and Fedora, and `/var/log/zypp/history`
-  and `/var/log/zypper.log` on openSUSE.
+- The installed rsyslog package and enabled local service.
+- With a receiver configured, a forwarding drop-in, a disk-assisted queue, and
+  any explicitly selected text log inputs.
 
 ### Not Managed
 
 - Journal storage, retention and socket forwarding settings belong to
   jomrr.journald.
-- The central receiver and its certificates.
+- The receiver, certificate issuance and distribution-owned local logging rules.
 
 ## Requirements
 
-- The packaged rsyslog configuration must include `/etc/rsyslog.d/*.conf`.
-  AlmaLinux and Fedora supply the imjournal input in their main configuration.
-- The collector must accept the configured transport and framing. For TLS its
-  certificate must match rsyslog_server and chain to a trusted CA.
+- Forwarding uses the packaged include of `/etc/rsyslog.d/*.conf`. AlmaLinux and
+  Fedora provide the imjournal input in their main configuration.
+- Both transports use RFC 5424 messages with octet-counted framing. Configure
+  plain TCP receivers for RFC 6587 octet counting. When the sender trusts only
+  the root CA, the TLS receiver must present its leaf certificate followed by
+  every required intermediate.
+- For mutual TLS, provision the client certificate chain and matching private
+  key on the sender. Allow rsyslog to read the files and restrict key access to
+  its service identity and administrators. Configure the receiver to require
+  client certificates and authorize the intended senders.
 
 ## Dependencies
 
@@ -55,34 +58,29 @@ collections:
 
 ### `rsyslog_server`
 
-Type: `str`. Required: `true`.
+Type: `str`. Required: `false`.
 
-DNS name or IP address of the collector. TLS verifies this identity against its
-certificate.
-
-### `rsyslog_port`
-
-Type: `int`. Required: `false`.
-
-Destination port on the collector.
-
-Default:
-
-```yaml
-rsyslog_port: 6514
-```
+A receiver hostname or IP address enables forwarding. Omit the variable or
+supply an empty string for local operation.
 
 ### `rsyslog_transport`
 
 Type: `str`. Required: `false`.
 
-Send RFC 5424 messages over authenticated TLS or plain TCP.
+Send octet-counted RFC 5424 messages over authenticated TLS or plain TCP.
 
 Default:
 
 ```yaml
 rsyslog_transport: tls
 ```
+
+### `rsyslog_port`
+
+Type: `int`. Required: `false`.
+
+Override the destination port. The default is 6514 for TLS and 514 for plain
+TCP.
 
 ### `rsyslog_ca_file`
 
@@ -97,12 +95,83 @@ Default:
 rsyslog_ca_file: ''
 ```
 
+### `rsyslog_client_cert_file`
+
+Type: `path`. Required: `false`.
+
+Absolute path to the sender's PEM certificate chain for mutual TLS. Set together
+with rsyslog_client_key_file.
+
+Default:
+
+```yaml
+rsyslog_client_cert_file: ''
+```
+
+### `rsyslog_client_key_file`
+
+Type: `path`. Required: `false`.
+
+Absolute path to the matching PEM private key on the sender.
+
+Default:
+
+```yaml
+rsyslog_client_key_file: ''
+```
+
+### `rsyslog_permitted_peers`
+
+Type: `list`. Required: `false`.
+
+Accepted receiver certificate identities. Defaults to a list containing
+rsyslog_server when forwarding is enabled.
+
+### `rsyslog_min_severity`
+
+Type: `str`. Required: `false`.
+
+Least urgent severity forwarded. For example, warning includes emerg through
+warning.
+
+Default:
+
+```yaml
+rsyslog_min_severity: info
+```
+
+### `rsyslog_queue_max_disk_space`
+
+Type: `str`. Required: `false`.
+
+Disk budget for the forwarding queue. Supply a positive byte count or an rsyslog
+size such as 256m.
+
+Default:
+
+```yaml
+rsyslog_queue_max_disk_space: 256m
+```
+
+### `rsyslog_platform_files`
+
+Type: `list`. Required: `false`.
+
+Paths to active platform logs selected in inventory, such as /var/log/dpkg.log.
+
+Default:
+
+```yaml
+rsyslog_platform_files: []
+```
+
 ### `rsyslog_additional_files`
 
 Type: `list`. Required: `false`.
 
-Active newline-delimited text logs to monitor in addition to the package manager
-logs.
+Each entry is an absolute text file path or a mapping with a required path and
+optional tag and facility. Defaults are the file basename and local0. The first
+mapping for a path takes precedence over plain path entries.
 
 Default:
 
@@ -113,7 +182,7 @@ rsyslog_additional_files: []
 ## Managed Files
 
 - `/etc/rsyslog.d/01-central.conf`
-- `/etc/apparmor.d/rsyslog.d/central-forwarding (Ubuntu)`
+- `/etc/apparmor.d/rsyslog.d/central-forwarding`
 - `/usr/local/sbin/rsyslog-validate-snippet`
 
 ## Check Mode
@@ -123,30 +192,34 @@ account already installed.
 
 ## Service Behavior
 
-Install, enable and start rsyslog. Reapplying the same settings leaves the
-running service in place.
+Removing rsyslog_server or setting it to an empty string removes the role's
+forwarding drop-in, Ubuntu AppArmor extension and validation helper. rsyslog
+continues running with the local rules.
 
 ### Handlers
 
-- Restart rsyslog after a change to the forwarding configuration or journal
-  access.
+- Validate the assembled configuration and restart rsyslog when the managed
+  configuration or journal access changes.
 
 ## Operational Notes
 
-- Journal collection uses imjournal directly, including when ForwardToSyslog is
-  disabled. Local socket and kernel inputs continue through the distribution's
-  rules. On Ubuntu the syslog account joins systemd-journal.
-- imfile tags each line with the file basename, facility local0 and severity
-  info. An absent file can appear later. Use paths to active text files readable
-  by rsyslog. Exclude rotated archives, binary login databases and local syslog
-  outputs such as /var/log/messages, /var/log/syslog and /var/log/auth.log to
-  avoid duplicate events.
-- Input positions persist across daemon restarts. Existing file content is
-  eligible on first discovery. A disk-assisted queue buffers messages during a
-  collector outage with a 256 MiB spool limit and retries when the receiver
-  returns.
-- Plain TCP uses newline framing and sends log data in cleartext. Set
-  rsyslog_port to the collector's TCP port when selecting this transport.
+- Journal forwarding uses imjournal directly, including when ForwardToSyslog is
+  disabled. On Red Hat systems, imjournal also feeds the distribution's local
+  rules. Files such as /var/log/messages and /var/log/secure can therefore
+  contain copies of persistent journal records. Adding those files as remote
+  inputs can duplicate events at the collector.
+- File collection is opt-in on every platform. To forward DNF, APT or Zypper
+  logs, list the active files in rsyslog_platform_files for the relevant
+  inventory group. imfile assigns severity info; a threshold of notice or higher
+  urgency omits file records.
+- Select newline-delimited text files readable by the service. SELinux may deny
+  reads by syslogd_t for nonstandard paths or labels. Check recent audit denials
+  on the sender with `ausearch -m avc -ts recent | grep rsyslog`.
+- The disk queue retries delivery during an outage. Disabling forwarding
+  preserves queued messages and input positions. Re-enabling uses that state, so
+  pending messages can go to the newly configured receiver. On Ubuntu, syslog
+  retains any systemd-journal group membership previously granted for journal
+  access.
 
 ## Supported Platforms
 
@@ -161,31 +234,46 @@ running service in place.
 
 ## Example Playbook
 
-### Forward the journal and package manager logs
+### Run the local syslog service
+
+```yaml
+---
+- name: Enable local logging
+  hosts: all
+  roles:
+    - role: jomrr.rsyslog
+```
+
+### Forward the journal over TLS
 
 ```yaml
 ---
 - name: Configure central logging
   hosts: all
-  gather_facts: true
   roles:
     - role: jomrr.rsyslog
       rsyslog_server: logs.example.org
 ```
 
-### Trust a private collector CA and include an application log
+### Authenticate a sender and select application logs
 
 ```yaml
 ---
 - name: Forward application and system logs
   hosts: app_servers
-  gather_facts: true
   roles:
     - role: jomrr.rsyslog
-      rsyslog_server: logs.internal.example.org
+      rsyslog_server: 192.0.2.10
+      rsyslog_permitted_peers: [logs.internal.example.org]
       rsyslog_ca_file: /etc/ssl/certs/internal-logging-ca.pem
+      rsyslog_client_cert_file: /etc/rsyslog.d/pki/sender.pem
+      rsyslog_client_key_file: /etc/rsyslog.d/pki/sender.key
+      rsyslog_queue_max_disk_space: 512m
       rsyslog_additional_files:
         - /var/log/myapp/events.log
+        - path: /var/log/myapp/access.log
+          tag: myapp-access
+          facility: local1
 ```
 
 ## References
@@ -193,6 +281,7 @@ running service in place.
 - [Journal input](https://docs.rsyslog.com/doc/configuration/modules/imjournal.html)
 - [Text file input](https://docs.rsyslog.com/doc/configuration/modules/imfile.html)
 - [Remote forwarding](https://docs.rsyslog.com/doc/configuration/modules/omfwd.html)
+- [Syslog over TCP](https://www.rfc-editor.org/rfc/rfc6587.html)
 
 ## Author
 

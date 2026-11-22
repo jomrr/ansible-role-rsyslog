@@ -6,6 +6,3 @@ __rsyslog_tls_package: rsyslog-module-gtls
 __rsyslog_ca_bundle: /etc/ssl/ca-bundle.pem
 __rsyslog_state_directory: /var/spool/rsyslog/central
 __rsyslog_state_owner: root
-__rsyslog_platform_logs:
-  - /var/log/zypp/history
-  - /var/log/zypper.log

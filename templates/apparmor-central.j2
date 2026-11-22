@@ -6,8 +6,12 @@
 {% if rsyslog_transport == 'tls' %}
 include <abstractions/ssl_certs>
 "{{ rsyslog_ca_file | default(__rsyslog_ca_bundle, true) }}" r,
+{% if rsyslog_client_cert_file %}
+"{{ rsyslog_client_cert_file }}" r,
+"{{ rsyslog_client_key_file }}" r,
 {% endif %}
-{% for path in rsyslog_additional_files %}
+{% endif %}
+{% for path in __rsyslog_file_inputs | map(attribute='path') | unique(case_sensitive=true) %}
 "{{ (path | dirname).rstrip('/') }}/" r,
 "{{ path }}" r,
 {% endfor %}

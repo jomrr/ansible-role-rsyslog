@@ -26,7 +26,6 @@ provisioner:
     group_vars:
       all:
         ansible_podman_mount_detection: false
-        rsyslog_server: "localhost"
   log: true
   playbooks:
     prepare: "../resources/playbooks/receivers.yml"
@@ -47,6 +46,9 @@ scenario:
     - "check"
     - "verify"
     - "side_effect"
+    - "converge"
+    - "idempotence"
+    - "verify"
     - "destroy"
   name: "dev"
 platforms:

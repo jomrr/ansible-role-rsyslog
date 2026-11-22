@@ -6,6 +6,3 @@ __rsyslog_tls_package: rsyslog-gnutls
 __rsyslog_ca_bundle: /etc/ssl/certs/ca-certificates.crt
 __rsyslog_state_directory: /var/spool/rsyslog/central
 __rsyslog_state_owner: "{{ 'syslog' if ansible_facts.distribution == 'Ubuntu' else 'root' }}"
-__rsyslog_platform_logs:
-  - /var/log/dpkg.log
-  - /var/log/apt/history.log

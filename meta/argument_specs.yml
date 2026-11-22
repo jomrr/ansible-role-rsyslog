@@ -4,19 +4,14 @@
 
 argument_specs:
   main:
-    short_description: Install rsyslog and forward local journal and file records.
+    short_description: Run the local syslog service and optionally forward journal records
+      and selected text files.
     options:
       rsyslog_server:
         type: str
-        required: true
         description:
-          - DNS name or IP address of the collector. TLS verifies this identity against
-            its certificate.
-      rsyslog_port:
-        type: int
-        default: 6514
-        description:
-          - Destination port on the collector.
+          - A receiver hostname or IP address enables forwarding. Omit the variable or supply
+            an empty string for local operation.
       rsyslog_transport:
         type: str
         choices:
@@ -24,17 +19,67 @@ argument_specs:
           - tcp
         default: tls
         description:
-          - Send RFC 5424 messages over authenticated TLS or plain TCP.
+          - Send octet-counted RFC 5424 messages over authenticated TLS or plain TCP.
+      rsyslog_port:
+        type: int
+        description:
+          - Override the destination port. The default is 6514 for TLS and 514 for plain
+            TCP.
       rsyslog_ca_file:
         type: path
         default: ''
         description:
           - Absolute path to a readable PEM trust bundle on the sender. An empty value uses
             the platform trust bundle.
-      rsyslog_additional_files:
+      rsyslog_client_cert_file:
+        type: path
+        default: ''
+        description:
+          - Absolute path to the sender's PEM certificate chain for mutual TLS. Set together
+            with rsyslog_client_key_file.
+      rsyslog_client_key_file:
+        type: path
+        default: ''
+        description:
+          - Absolute path to the matching PEM private key on the sender.
+      rsyslog_permitted_peers:
+        type: list
+        elements: str
+        description:
+          - Accepted receiver certificate identities. Defaults to a list containing rsyslog_server
+            when forwarding is enabled.
+      rsyslog_min_severity:
+        type: str
+        choices:
+          - emerg
+          - alert
+          - crit
+          - err
+          - warning
+          - notice
+          - info
+          - debug
+        default: info
+        description:
+          - Least urgent severity forwarded. For example, warning includes emerg through
+            warning.
+      rsyslog_queue_max_disk_space:
+        type: str
+        default: 256m
+        description:
+          - Disk budget for the forwarding queue. Supply a positive byte count or an rsyslog
+            size such as 256m.
+      rsyslog_platform_files:
         type: list
         elements: path
         default: []
         description:
-          - Active newline-delimited text logs to monitor in addition to the package manager
-            logs.
+          - Paths to active platform logs selected in inventory, such as /var/log/dpkg.log.
+      rsyslog_additional_files:
+        type: list
+        elements: raw
+        default: []
+        description:
+          - Each entry is an absolute text file path or a mapping with a required path and
+            optional tag and facility. Defaults are the file basename and local0. The first
+            mapping for a path takes precedence over plain path entries.

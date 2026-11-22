@@ -5,20 +5,26 @@
 module(load="imjournal" StateFile="{{ __rsyslog_state_directory }}/imjournal.state"
        PersistStateInterval="100")
 {% endif %}
+{% if __rsyslog_file_inputs %}
 module(load="imfile" statefile.directory="{{ __rsyslog_state_directory }}")
+{% endif %}
 
 ruleset(name="central_forward") {
-    action(type="omfwd" target="{{ rsyslog_server }}" port="{{ rsyslog_port }}" protocol="tcp"
-           template="RSYSLOG_SyslogProtocol23Format"
+    if prifilt("*.{{ rsyslog_min_severity }}") then
+        action(type="omfwd" target="{{ rsyslog_server }}" port="{{ rsyslog_port }}" protocol="tcp"
+               template="RSYSLOG_SyslogProtocol23Format" TCP_Framing="octet-counted"
 {% if rsyslog_transport == 'tls' %}
-           TCP_Framing="octet-counted"
-           StreamDriver="gtls" StreamDriverMode="1" StreamDriverAuthMode="x509/name"
-           StreamDriverPermittedPeers="{{ rsyslog_server }}"
-           StreamDriver.CAFile="{{ rsyslog_ca_file | default(__rsyslog_ca_bundle, true) }}"
+               StreamDriver="gtls" StreamDriverMode="1" StreamDriverAuthMode="x509/name"
+               StreamDriverPermittedPeers="{{ rsyslog_permitted_peers | join(',') }}"
+               StreamDriver.CAFile="{{ rsyslog_ca_file | default(__rsyslog_ca_bundle, true) }}"
+{% if rsyslog_client_cert_file %}
+               StreamDriver.CertFile="{{ rsyslog_client_cert_file }}"
+               StreamDriver.KeyFile="{{ rsyslog_client_key_file }}"
 {% endif %}
-           action.resumeRetryCount="-1" queue.type="LinkedList" queue.filename="forward"
-           queue.spoolDirectory="{{ __rsyslog_state_directory }}"
-           queue.maxDiskSpace="256m" queue.saveOnShutdown="on")
+{% endif %}
+               action.resumeRetryCount="-1" queue.type="LinkedList" queue.filename="forward"
+               queue.spoolDirectory="{{ __rsyslog_state_directory }}"
+               queue.maxDiskSpace="{{ rsyslog_queue_max_disk_space }}" queue.saveOnShutdown="on")
 }
 
 if $inputname == "imjournal" then {
@@ -29,7 +35,7 @@ if $inputname == "imjournal" then {
 {% endif %}
 }
 
-{% for path in (__rsyslog_platform_logs + rsyslog_additional_files) | unique(case_sensitive=true) %}
-input(type="imfile" File="{{ path }}" Tag="{{ path | basename }}:" Facility="local0"
-      Severity="info" PersistStateInterval="100" Ruleset="central_forward")
+{% for input in __rsyslog_file_inputs | unique(attribute='path', case_sensitive=true) %}
+input(type="imfile" File="{{ input.path }}" Tag="{{ (input.tag | default(input.path | basename)).rstrip(':') }}:"
+      Facility="{{ input.facility | default('local0') }}" Severity="info" PersistStateInterval="100" Ruleset="central_forward")
 {% endfor %}

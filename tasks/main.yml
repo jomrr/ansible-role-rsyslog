@@ -4,6 +4,7 @@
 
 - name: RSYSLOG | Load platform settings
   ansible.builtin.include_vars: "{{ lookup('ansible.builtin.first_found', __rsyslog_platform_files) }}"
+  when: __rsyslog_forwarding
   vars:
     __rsyslog_platform_files:
       files:
@@ -13,68 +14,34 @@
 
 - name: RSYSLOG | Validate forwarding inputs
   ansible.builtin.import_tasks: assert.yml
+  when: __rsyslog_forwarding
 
-- name: RSYSLOG | Install the forwarding packages
+- name: RSYSLOG | Install rsyslog and the selected transport
   become: true
   become_user: root
   ansible.builtin.package:
-    name: "{{ ['rsyslog', __rsyslog_tls_package, 'ca-certificates'] if rsyslog_transport == 'tls' else ['rsyslog'] }}"
+    name: >-
+      {{ ['rsyslog', __rsyslog_tls_package, 'ca-certificates']
+         if __rsyslog_forwarding and rsyslog_transport == 'tls' else ['rsyslog'] }}
     state: present
 
-- name: RSYSLOG | Grant the Ubuntu syslog account access to the journal
-  become: true
-  become_user: root
-  ansible.builtin.user:
-    name: syslog
-    groups: systemd-journal
-    append: true
-  when: ansible_facts.distribution == 'Ubuntu'
-  notify: restart rsyslog
+- name: RSYSLOG | Configure the remote sender
+  ansible.builtin.include_tasks: forward.yml
+  when: __rsyslog_forwarding
 
-- name: RSYSLOG | Create the private directory for input positions and queued messages
+- name: RSYSLOG | Remove managed forwarding configuration in local mode
   become: true
   become_user: root
   ansible.builtin.file:
-    path: "{{ __rsyslog_state_directory }}"
-    state: directory
-    owner: "{{ __rsyslog_state_owner }}"
-    group: "{{ __rsyslog_state_owner }}"
-    mode: '0700'
-
-- name: RSYSLOG | Permit the Ubuntu AppArmor profile to read sender inputs
-  become: true
-  become_user: root
-  ansible.builtin.template:
-    src: apparmor-central.j2
-    dest: /etc/apparmor.d/rsyslog.d/central-forwarding
-    owner: root
-    group: root
-    mode: '0644'
-    backup: true
-  when: ansible_facts.distribution == 'Ubuntu'
-  notify: restart rsyslog
-
-- name: RSYSLOG | Install the native snippet validation helper
-  become: true
-  become_user: root
-  ansible.builtin.copy:
-    src: rsyslog-validate-snippet
-    dest: /usr/local/sbin/rsyslog-validate-snippet
-    owner: root
-    group: root
-    mode: '0755'
-
-- name: RSYSLOG | Configure forwarding
-  become: true
-  become_user: root
-  ansible.builtin.template:
-    src: central.conf.j2
-    dest: /etc/rsyslog.d/01-central.conf
-    owner: root
-    group: root
-    mode: '0644'
-    backup: true
-    validate: /usr/local/sbin/rsyslog-validate-snippet %s
+    path: "{{ __rsyslog_sender_file }}"
+    state: absent
+  loop:
+    - /etc/rsyslog.d/01-central.conf
+    - /usr/local/sbin/rsyslog-validate-snippet
+    - /etc/apparmor.d/rsyslog.d/central-forwarding
+  loop_control:
+    loop_var: __rsyslog_sender_file
+  when: not __rsyslog_forwarding
   notify: restart rsyslog
 
 - name: RSYSLOG | Enable and start rsyslog

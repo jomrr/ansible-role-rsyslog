@@ -1,0 +1,10 @@
+---
+# role: rsyslog
+# file: vars/main.yml
+
+__rsyslog_forwarding: "{{ rsyslog_server is defined and rsyslog_server not in [none, ''] }}"
+# A tagged entry takes precedence over a plain path listed in either inventory variable.
+__rsyslog_file_inputs: >-
+  {{ (rsyslog_additional_files | select('mapping') | list)
+     + ((rsyslog_platform_files + (rsyslog_additional_files | reject('mapping') | list))
+        | map('community.general.dict_kv', 'path') | list) }}

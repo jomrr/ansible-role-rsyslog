@@ -2,20 +2,44 @@
 # role: rsyslog
 # file: defaults/main.yml
 
-# DNS name or IP address of the central syslog receiver.
+# Optional DNS name or IP address of the receiver that enables remote forwarding.
 # rsyslog_server: logs.example.org
 
 # Transport used for forwarding to the receiver.
 # Choices: tls, tcp
 rsyslog_transport: tls
 
-# Listening port of the central syslog receiver.
-rsyslog_port: 6514
+# Destination port, defaulting to the standard port for the selected transport.
+rsyslog_port: "{{ 6514 if rsyslog_transport == 'tls' else 514 }}"
 
-# Absolute path to a PEM trust bundle, with an empty value using the distribution bundle.
+# Absolute PEM trust bundle path, with an empty value using the distribution bundle.
 rsyslog_ca_file: ''
 
-# Additional newline-delimited text files to forward alongside the platform logs.
+# Absolute PEM certificate chain path for mutual TLS.
+rsyslog_client_cert_file: ''
+
+# Absolute PEM private key path paired with the client certificate.
+rsyslog_client_key_file: ''
+
+# Certificate identities accepted from the receiver during TLS authentication.
+rsyslog_permitted_peers: "{{ [rsyslog_server] if __rsyslog_forwarding else [] }}"
+
+# Least urgent syslog severity sent to the collector.
+# Choices: emerg, alert, crit, err, warning, notice, info, debug
+rsyslog_min_severity: info
+
+# Disk budget for the forwarding action queue in rsyslog size units.
+rsyslog_queue_max_disk_space: 256m
+
+# Platform-specific text log paths selected in inventory.
+rsyslog_platform_files: []
+# rsyslog_platform_files:
+#   - /var/log/dpkg.log
+
+# Additional text logs specified as paths or mappings with path, tag and facility.
 rsyslog_additional_files: []
 # rsyslog_additional_files:
 #   - /var/log/myapp/events.log
+#   - path: /var/log/myapp/access.log
+#     tag: myapp-access
+#     facility: local1

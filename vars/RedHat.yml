@@ -6,5 +6,3 @@ __rsyslog_tls_package: rsyslog-gnutls
 __rsyslog_ca_bundle: /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
 __rsyslog_state_directory: /var/lib/rsyslog/central
 __rsyslog_state_owner: root
-__rsyslog_platform_logs:
-  - "/var/log/{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf' }}.log"

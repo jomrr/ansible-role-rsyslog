@@ -1,7 +1,7 @@
 [project]
 name = "rsyslog"
 version = "0.0.0"
-description = "Forward the systemd journal and platform log files to a central syslog receiver."
+description = "Install and run rsyslog locally with optional forwarding to a central receiver."
 requires-python = ">=3.13"
 authors = [
   { name = "Jonas Mauer" },
