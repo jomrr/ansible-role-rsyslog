@@ -1,0 +1,14 @@
+---
+# role: rsyslog
+# file: tasks/install.yml
+
+- name: install | Install rsyslog with TLS support
+  become: true
+  become_user: root
+  ansible.builtin.package:
+    name:
+      - rsyslog
+      - "{{ __rsyslog_tls_package }}"
+      - ca-certificates
+    state: present
+    policy_rc_d: "{{ __rsyslog_policy_rc_d | default(omit) }}"

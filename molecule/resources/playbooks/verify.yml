@@ -6,12 +6,17 @@
   hosts: all
   gather_facts: false
   tasks:
+    - name: RSYSLOG | Read the installed packages
+      ansible.builtin.package_facts:
+
     - name: RSYSLOG | Read the installed services
       ansible.builtin.service_facts:
 
-    - name: RSYSLOG | Check the local service is enabled and running
+    - name: RSYSLOG | Check that the local service runs with TLS support installed
       ansible.builtin.assert:
         that:
+          - "'ca-certificates' in ansible_facts.packages"
+          - "'rsyslog-gnutls' in ansible_facts.packages or 'rsyslog-module-gtls' in ansible_facts.packages"
           - ansible_facts.services['rsyslog.service'].state == 'running'
           - ansible_facts.services['rsyslog.service'].status == 'enabled'
         quiet: true
@@ -20,7 +25,9 @@
       become: true
       become_user: root
       ansible.builtin.command: rsyslogd -N1
+      register: __rsyslog_local_validation
       changed_when: false
+      failed_when: __rsyslog_local_validation.rc != 0
 
     - name: RSYSLOG | Check the managed remote action is absent
       ansible.builtin.wait_for:

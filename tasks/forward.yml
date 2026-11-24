@@ -2,7 +2,7 @@
 # role: rsyslog
 # file: tasks/forward.yml
 
-- name: RSYSLOG | Grant the Ubuntu syslog account access to the journal
+- name: forward | Grant the Ubuntu syslog account access to the journal
   become: true
   become_user: root
   ansible.builtin.user:
@@ -12,7 +12,7 @@
   when: ansible_facts.distribution == 'Ubuntu'
   notify: restart rsyslog
 
-- name: RSYSLOG | Create the private directory for input positions and queued messages
+- name: forward | Create the private directory for input positions and queued messages
   become: true
   become_user: root
   ansible.builtin.file:
@@ -22,7 +22,7 @@
     group: "{{ __rsyslog_state_owner }}"
     mode: '0700'
 
-- name: RSYSLOG | Permit the Ubuntu AppArmor profile to read sender inputs
+- name: forward | Permit the Ubuntu AppArmor profile to read sender inputs
   become: true
   become_user: root
   ansible.builtin.template:
@@ -31,11 +31,11 @@
     owner: root
     group: root
     mode: '0644'
-    backup: true
+    backup: "{{ rsyslog_backup }}"
   when: ansible_facts.distribution == 'Ubuntu'
   notify: restart rsyslog
 
-- name: RSYSLOG | Install the native snippet validation helper
+- name: forward | Install the native snippet validation helper
   become: true
   become_user: root
   ansible.builtin.copy:
@@ -44,8 +44,9 @@
     owner: root
     group: root
     mode: '0755'
+    backup: "{{ rsyslog_backup }}"
 
-- name: RSYSLOG | Configure forwarding
+- name: forward | Configure forwarding
   become: true
   become_user: root
   ansible.builtin.template:
@@ -54,6 +55,6 @@
     owner: root
     group: root
     mode: '0644'
-    backup: true
-    validate: /usr/local/sbin/rsyslog-validate-snippet %s
+    backup: "{{ rsyslog_backup }}"
+    validate: "{{ __rsyslog_validate_config }}"
   notify: restart rsyslog

@@ -2,34 +2,21 @@
 # role: rsyslog
 # file: tasks/main.yml
 
-- name: RSYSLOG | Load platform settings
-  ansible.builtin.include_vars: "{{ lookup('ansible.builtin.first_found', __rsyslog_platform_files) }}"
-  when: __rsyslog_forwarding
-  vars:
-    __rsyslog_platform_files:
-      files:
-        - "{{ ansible_facts.os_family }}.yml"
-      paths:
-        - "{{ role_path }}/vars"
+- name: Gather facts and load platform settings
+  ansible.builtin.import_tasks: set_vars.yml
 
-- name: RSYSLOG | Validate forwarding inputs
+- name: Validate forwarding inputs
   ansible.builtin.import_tasks: assert.yml
   when: __rsyslog_forwarding
 
-- name: RSYSLOG | Install rsyslog and the selected transport
-  become: true
-  become_user: root
-  ansible.builtin.package:
-    name: >-
-      {{ ['rsyslog', __rsyslog_tls_package, 'ca-certificates']
-         if __rsyslog_forwarding and rsyslog_transport == 'tls' else ['rsyslog'] }}
-    state: present
+- name: Install rsyslog with TLS support
+  ansible.builtin.import_tasks: install.yml
 
-- name: RSYSLOG | Configure the remote sender
-  ansible.builtin.include_tasks: forward.yml
+- name: Configure the remote sender
+  ansible.builtin.import_tasks: forward.yml
   when: __rsyslog_forwarding
 
-- name: RSYSLOG | Remove managed forwarding configuration in local mode
+- name: Remove managed forwarding configuration in local mode
   become: true
   become_user: root
   ansible.builtin.file:
@@ -41,10 +28,19 @@
     - /etc/apparmor.d/rsyslog.d/central-forwarding
   loop_control:
     loop_var: __rsyslog_sender_file
+    label: "{{ __rsyslog_sender_file }}"
   when: not __rsyslog_forwarding
   notify: restart rsyslog
 
-- name: RSYSLOG | Enable and start rsyslog
+- name: Validate the assembled configuration before starting rsyslog
+  become: true
+  become_user: root
+  ansible.builtin.command: "{{ __rsyslog_validate_service }}"
+  register: __rsyslog_validation
+  changed_when: false
+  failed_when: __rsyslog_validation.rc != 0
+
+- name: Enable and start rsyslog
   become: true
   become_user: root
   ansible.builtin.systemd_service:

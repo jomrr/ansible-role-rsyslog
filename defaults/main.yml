@@ -2,6 +2,9 @@
 # role: rsyslog
 # file: defaults/main.yml
 
+# Back up managed files before replacing their contents.
+rsyslog_backup: true
+
 # Optional DNS name or IP address of the receiver that enables remote forwarding.
 # rsyslog_server: logs.example.org
 

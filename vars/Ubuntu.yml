@@ -1,0 +1,5 @@
+---
+# role: rsyslog
+# file: vars/Ubuntu.yml
+
+__rsyslog_state_owner: syslog

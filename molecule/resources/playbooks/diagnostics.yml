@@ -15,6 +15,7 @@
         -u molecule-syslog-mtls.service -u molecule-syslog-tcp.service
       register: __rsyslog_unit_events
       changed_when: false
+      failed_when: __rsyslog_unit_events.rc != 0
 
     - name: RSYSLOG | Show sender and collector events
       ansible.builtin.debug:

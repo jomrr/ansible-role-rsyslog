@@ -14,6 +14,9 @@
       ansible.builtin.command:
         cmd: apparmor_parser --remove /etc/apparmor.d/usr.sbin.rsyslogd
         removes: /sys/kernel/security/apparmor/policy/profiles/rsyslogd.*
+      register: __rsyslog_profile_removal
+      changed_when: __rsyslog_profile_removal.start is not none
+      failed_when: __rsyslog_profile_removal.rc != 0
       when: lookup('ansible.builtin.env', 'RUNNER_ENVIRONMENT') == 'github-hosted'
 
 - name: RSYSLOG | Refresh package metadata
@@ -52,6 +55,9 @@
           -addext subjectAltName=DNS:localhost,DNS:rsyslog-collector.test -keyout /run/rsyslog-collector.key
           -out /run/rsyslog-collector.crt
         creates: /run/rsyslog-collector.key
+      register: __rsyslog_collector_cert
+      changed_when: __rsyslog_collector_cert.start is not none
+      failed_when: __rsyslog_collector_cert.rc != 0
 
     - name: RSYSLOG | Trust the test collector through the platform CA store
       become: true
@@ -61,36 +67,47 @@
         remote_src: true
         dest: "{{ __rsyslog_anchor_dirs[ansible_facts.os_family] }}/molecule-collector.crt"
         mode: '0644'
+      notify: RSYSLOG | Refresh the platform CA bundle
 
+    - name: RSYSLOG | Install the loopback collector units
+      become: true
+      become_user: root
+      ansible.builtin.copy:
+        dest: "/run/systemd/system/molecule-syslog-{{ __rsyslog_collector.name }}.service"
+        mode: '0644'
+        content: |
+          [Service]
+          WorkingDirectory=/run
+          ExecStart=/usr/bin/socat -u {{ __rsyslog_collector.listener }} OPEN:/var/log/molecule-collector-{{ __rsyslog_collector.name }},creat,append
+      loop:
+        - name: tcp
+          listener: TCP4-LISTEN:514,bind=127.0.0.1,reuseaddr,fork
+        - name: tls
+          listener: OPENSSL-LISTEN:6514,bind=127.0.0.1,reuseaddr,fork,verify=0,cert=rsyslog-collector.crt,key=rsyslog-collector.key
+        - name: mtls
+          listener: >-
+            OPENSSL-LISTEN:16514,bind=127.0.0.1,reuseaddr,fork,verify=1,cafile=rsyslog-client.crt,cert=rsyslog-collector.crt,key=rsyslog-collector.key
+      loop_control:
+        loop_var: __rsyslog_collector
+        label: "{{ __rsyslog_collector.name }}"
+
+    - name: RSYSLOG | Start the TCP and TLS collectors
+      become: true
+      become_user: root
+      ansible.builtin.systemd_service:
+        name: "molecule-syslog-{{ __rsyslog_transport }}.service"
+        daemon_reload: true
+        state: started
+      loop: [tcp, tls]
+      loop_control:
+        loop_var: __rsyslog_transport
+        label: "{{ __rsyslog_transport }}"
+
+  handlers:
     - name: RSYSLOG | Refresh the platform CA bundle
       become: true
       become_user: root
       ansible.builtin.command: "{{ 'update-ca-trust' if ansible_facts.os_family == 'RedHat' else 'update-ca-certificates' }}"
-      changed_when: true
-
-    - name: RSYSLOG | Start the TLS collector
-      become: true
-      become_user: root
-      ansible.builtin.command: >-
-        systemd-run --unit=molecule-syslog-tls socat -u
-        OPENSSL-LISTEN:6514,bind=127.0.0.1,reuseaddr,fork,verify=0,cert=/run/rsyslog-collector.crt,key=/run/rsyslog-collector.key
-        OPEN:/var/log/molecule-collector-tls,creat,append
-      changed_when: true
-
-    - name: RSYSLOG | Install the restartable TCP collector for the outage test
-      become: true
-      become_user: root
-      ansible.builtin.copy:
-        dest: /run/systemd/system/molecule-syslog-tcp.service
-        mode: '0644'
-        content: |
-          [Service]
-          ExecStart=/usr/bin/socat -u TCP4-LISTEN:514,bind=127.0.0.1,reuseaddr,fork OPEN:/var/log/molecule-collector-tcp,creat,append
-
-    - name: RSYSLOG | Start the TCP collector
-      become: true
-      become_user: root
-      ansible.builtin.systemd_service:
-        name: molecule-syslog-tcp.service
-        daemon_reload: true
-        state: started
+      register: __rsyslog_trust_update
+      changed_when: __rsyslog_trust_update.rc == 0
+      failed_when: __rsyslog_trust_update.rc != 0

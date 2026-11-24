@@ -2,7 +2,7 @@
 # role: rsyslog
 # file: tasks/assert.yml
 
-- name: RSYSLOG | Check the forwarding destination and queue size
+- name: assert | Check the forwarding destination and queue size
   ansible.builtin.assert:
     that:
       - rsyslog_server is match('^[A-Za-z0-9:][A-Za-z0-9.:-]*\Z')
@@ -12,7 +12,7 @@
     fail_msg: Supply a receiver address, a port from 1 to 65535 and a positive queue size such as 256m.
     quiet: true
 
-- name: RSYSLOG | Check the TLS identity and certificate paths
+- name: assert | Check the TLS identity and certificate paths
   ansible.builtin.assert:
     that:
       - rsyslog_permitted_peers | length > 0
@@ -25,7 +25,7 @@
     quiet: true
   when: rsyslog_transport == 'tls'
 
-- name: RSYSLOG | Check text log paths, tags and facilities
+- name: assert | Check text log paths, tags and facilities
   ansible.builtin.assert:
     that:
       - __rsyslog_input.keys() | difference(['path', 'tag', 'facility']) | length == 0

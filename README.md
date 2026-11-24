@@ -19,7 +19,8 @@ against the system trust store by default.
 
 ### Managed
 
-- The installed rsyslog package and enabled local service.
+- The enabled rsyslog service, its GnuTLS module and the system CA certificates
+  on every host.
 - With a receiver configured, a forwarding drop-in, a disk-assisted queue, and
   any explicitly selected text log inputs.
 
@@ -55,6 +56,19 @@ collections:
 ```
 
 ## Role Variables
+
+### `rsyslog_backup`
+
+Type: `bool`. Required: `false`.
+
+Back up the forwarding drop-in, AppArmor extension and validation helper before
+replacing their contents.
+
+Default:
+
+```yaml
+rsyslog_backup: true
+```
 
 ### `rsyslog_server`
 
@@ -208,7 +222,9 @@ account already installed.
 
 Removing rsyslog_server or setting it to an empty string removes the role's
 forwarding drop-in, Ubuntu AppArmor extension and validation helper. rsyslog
-continues running with the local rules.
+continues running with the local rules. The role validates the assembled
+configuration before starting the service. Applying the same settings again
+keeps the running service in place.
 
 ### Handlers
 

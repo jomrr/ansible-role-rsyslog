@@ -1,0 +1,18 @@
+---
+# role: rsyslog
+# file: tasks/set_vars.yml
+
+- name: set_vars | Gather required distribution facts
+  ansible.builtin.setup:
+    gather_subset: "{{ __rsyslog_required_facts_subsets }}"
+  when: __rsyslog_required_facts | difference(ansible_facts.keys()) | length > 0
+
+- name: set_vars | Load platform settings
+  ansible.builtin.include_vars: "{{ __rsyslog_vars_file }}"
+  loop: "{{ [ansible_facts.os_family, ansible_facts.distribution] | unique }}"
+  loop_control:
+    loop_var: __rsyslog_platform
+    label: "{{ __rsyslog_platform }}"
+  vars:
+    __rsyslog_vars_file: "{{ role_path }}/vars/{{ __rsyslog_platform }}.yml"
+  when: __rsyslog_vars_file is file

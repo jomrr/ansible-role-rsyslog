@@ -7,6 +7,12 @@ argument_specs:
     short_description: Run the local syslog service and optionally forward journal records
       and selected text files.
     options:
+      rsyslog_backup:
+        type: bool
+        default: true
+        description:
+          - Back up the forwarding drop-in, AppArmor extension and validation helper before
+            replacing their contents.
       rsyslog_server:
         type: str
         description:
