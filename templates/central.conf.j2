@@ -23,6 +23,10 @@ ruleset(name="central_forward") {
     then
         action(type="omfwd" target="{{ rsyslog_server }}" port="{{ rsyslog_port }}" protocol="tcp"
                template="RSYSLOG_SyslogProtocol23Format" TCP_Framing="octet-counted"
+{% if rsyslog_keepalive | bool %}
+               KeepAlive="on" KeepAlive.Time="{{ rsyslog_keepalive_time | int }}"
+               KeepAlive.Interval="{{ rsyslog_keepalive_interval | int }}" KeepAlive.Probes="{{ rsyslog_keepalive_probes | int }}"
+{% endif %}
 {% if rsyslog_transport == 'tls' %}
                StreamDriver="gtls" StreamDriverMode="1" StreamDriverAuthMode="x509/name"
                StreamDriverPermittedPeers="{{ rsyslog_permitted_peers | join(',') }}"

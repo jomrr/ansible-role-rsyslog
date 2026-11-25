@@ -23,6 +23,16 @@
         fail_msg: Supply a receiver address, a port from 1 to 65535 and a positive queue size such as 256m.
         quiet: true
 
+    - name: assert | Check TCP keepalive settings
+      ansible.builtin.assert:
+        that:
+          - 0 <= rsyslog_keepalive_time | int <= 32767
+          - 0 <= rsyslog_keepalive_interval | int <= 32767
+          - 0 <= rsyslog_keepalive_probes | int <= 127
+        fail_msg: Supply keepalive times from 0 to 32767 seconds and a probe count from 0 to 127. Zero uses the corresponding kernel default.
+        quiet: true
+      when: rsyslog_keepalive | bool
+
     - name: assert | Check the TLS identity and certificate paths
       ansible.builtin.assert:
         that:

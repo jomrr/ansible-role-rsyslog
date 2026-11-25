@@ -75,6 +75,12 @@
         search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ loki \d+ - - central-journal-probe$'
         timeout: 45
 
+    - name: Verify the default forwarding connection has no keepalive timer
+      ansible.builtin.command: ss -Hnto state established dport = :6514
+      register: __rsyslog_default_socket
+      changed_when: false
+      failed_when: __rsyslog_default_socket.rc != 0 or __rsyslog_default_socket.stdout == '' or 'timer:(keepalive,' in __rsyslog_default_socket.stdout
+
     - name: Send the control record to the distribution's local socket input
       ansible.builtin.command:
         cmd: socat -u STDIN UNIX-SENDTO:/run/systemd/journal/syslog
@@ -150,6 +156,10 @@
   vars:
     rsyslog_server: 127.0.0.1
     rsyslog_port: 16514
+    rsyslog_keepalive: true
+    rsyslog_keepalive_time: 60
+    rsyslog_keepalive_interval: 15
+    rsyslog_keepalive_probes: 4
     rsyslog_permitted_peers: [standby.example.org, localhost]
     rsyslog_client_cert_file: /run/rsyslog-client.crt
     rsyslog_client_key_file: /run/rsyslog-client.key
@@ -213,6 +223,15 @@
         loop_var: __rsyslog_sequence
         label: "{{ __rsyslog_sequence }}"
 
+    - name: Verify the authenticated sender socket has an active TCP keepalive timer
+      ansible.builtin.command: ss -Hnto state established dport = :16514
+      register: __rsyslog_tls_socket
+      changed_when: false
+      failed_when: __rsyslog_tls_socket.rc != 0
+      until: "'timer:(keepalive,' in __rsyslog_tls_socket.stdout"
+      retries: 10
+      delay: 1
+
     - name: Check that the less urgent notice stayed local
       ansible.builtin.command:
         argv: [grep, -Ec, '^[0-9]+ <[0-9]+>1 [^ ]+ [^ ]+ molecule-mtls [0-9]+ - - probe-notice-[123]$', /var/log/molecule-collector-mtls]
@@ -226,6 +245,7 @@
   vars:
     rsyslog_server: 127.0.0.1
     rsyslog_transport: tcp
+    rsyslog_keepalive: true
     rsyslog_forward_only: true
     rsyslog_excluded_programs: [loki, excluded.log]
     rsyslog_platform_files: [/var/log/molecule-platform.log]
@@ -332,6 +352,15 @@
         path: /var/log/molecule-collector-tcp
         search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ loki-canary \d+ - - offline-journal-loki-canary-probe$'
         timeout: 45
+
+    - name: Verify the reconnected plain TCP socket has an active keepalive timer
+      ansible.builtin.command: ss -Hnto state established dport = :514
+      register: __rsyslog_tcp_socket
+      changed_when: false
+      failed_when: __rsyslog_tcp_socket.rc != 0
+      until: "'timer:(keepalive,' in __rsyslog_tcp_socket.stdout"
+      retries: 10
+      delay: 1
 
     - name: Verify the excluded Loki record is still in the local journal
       become: true

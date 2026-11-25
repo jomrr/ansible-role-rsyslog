@@ -43,7 +43,11 @@
       become: true
       become_user: root
       ansible.builtin.package:
-        name: [socat, openssl, ca-certificates]
+        name:
+          - socat
+          - openssl
+          - ca-certificates
+          - "{{ 'iproute' if ansible_facts.os_family == 'RedHat' else 'iproute2' }}"
         state: present
 
     - name: Create a certificate for the TLS collector

@@ -24,6 +24,18 @@ rsyslog_transport: tls
 # Destination port, defaulting to the standard port for the selected transport.
 rsyslog_port: "{{ 6514 if rsyslog_transport == 'tls' else 514 }}"
 
+# Enable TCP keepalive on the forwarding socket for either transport.
+rsyslog_keepalive: false
+
+# Idle seconds before the first keepalive probe, with zero using the kernel default.
+rsyslog_keepalive_time: 0
+
+# Seconds between unanswered keepalive probes, with zero using the kernel default.
+rsyslog_keepalive_interval: 0
+
+# Number of unanswered keepalive probes allowed, with zero using the kernel default.
+rsyslog_keepalive_probes: 0
+
 # Absolute PEM trust bundle path, with an empty value using the distribution bundle.
 rsyslog_ca_file: ''
 

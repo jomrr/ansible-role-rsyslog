@@ -137,6 +137,58 @@ Type: `int`. Required: `false`.
 Override the destination port. The default is 6514 for TLS and 514 for plain
 TCP.
 
+### `rsyslog_keepalive`
+
+Type: `bool`. Required: `false`.
+
+Enable TCP keepalive probes on the forwarding connection for both TLS and plain
+TCP.
+
+Default:
+
+```yaml
+rsyslog_keepalive: false
+```
+
+### `rsyslog_keepalive_time`
+
+Type: `int`. Required: `false`.
+
+Idle time in seconds before the first probe when keepalive is enabled. Use 1 to
+32767, or 0 for the kernel default.
+
+Default:
+
+```yaml
+rsyslog_keepalive_time: 0
+```
+
+### `rsyslog_keepalive_interval`
+
+Type: `int`. Required: `false`.
+
+Seconds between unanswered probes when keepalive is enabled. Use 1 to 32767, or
+0 for the kernel default.
+
+Default:
+
+```yaml
+rsyslog_keepalive_interval: 0
+```
+
+### `rsyslog_keepalive_probes`
+
+Type: `int`. Required: `false`.
+
+Number of unanswered probes before Linux closes the connection. Use 1 to 127, or
+0 for the kernel default, when keepalive is enabled.
+
+Default:
+
+```yaml
+rsyslog_keepalive_probes: 0
+```
+
 ### `rsyslog_ca_file`
 
 Type: `path`. Required: `false`.
@@ -277,6 +329,12 @@ place.
 
 ## Operational Notes
 
+- TCP keepalive is off by default. With 60 seconds of idle time, a 15-second
+  interval and 4 unanswered probes, Linux can detect an unreachable peer on an
+  idle forwarding connection in about 2 minutes. Subsequent delivery uses
+  omfwd's existing retry queue. If the TCP send queue already holds
+  unacknowledged data, TCP retransmission timers determine when the connection
+  fails.
 - On the collector host, set `rsyslog_excluded_programs: [loki]` to keep Loki's
   own messages in the local journal and avoid sending them back to Loki. The
   filter compares the rsyslog `programname` before queuing a message for
@@ -343,7 +401,7 @@ place.
     - role: jomrr.rsyslog
 ```
 
-### Forward the journal over TLS
+### Forward the journal over TLS with TCP keepalive
 
 ```yaml
 ---
@@ -352,6 +410,10 @@ place.
   roles:
     - role: jomrr.rsyslog
       rsyslog_server: logs.example.org
+      rsyslog_keepalive: true
+      rsyslog_keepalive_time: 60
+      rsyslog_keepalive_interval: 15
+      rsyslog_keepalive_probes: 4
 ```
 
 ### Use the journal as the local record and buffer remote delivery

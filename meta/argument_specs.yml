@@ -50,6 +50,30 @@ argument_specs:
         description:
           - Override the destination port. The default is 6514 for TLS and 514 for plain
             TCP.
+      rsyslog_keepalive:
+        type: bool
+        default: false
+        description:
+          - Enable TCP keepalive probes on the forwarding connection for both TLS and plain
+            TCP.
+      rsyslog_keepalive_time:
+        type: int
+        default: 0
+        description:
+          - Idle time in seconds before the first probe when keepalive is enabled. Use 1
+            to 32767, or 0 for the kernel default.
+      rsyslog_keepalive_interval:
+        type: int
+        default: 0
+        description:
+          - Seconds between unanswered probes when keepalive is enabled. Use 1 to 32767,
+            or 0 for the kernel default.
+      rsyslog_keepalive_probes:
+        type: int
+        default: 0
+        description:
+          - Number of unanswered probes before Linux closes the connection. Use 1 to 127,
+            or 0 for the kernel default, when keepalive is enabled.
       rsyslog_ca_file:
         type: path
         default: ''
