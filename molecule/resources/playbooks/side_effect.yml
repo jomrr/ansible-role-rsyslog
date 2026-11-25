@@ -103,6 +103,47 @@
       changed_when: false
       failed_when: __rsyslog_excluded.rc != 1
 
+- name: Verify a finite journal input rate limit
+  hosts: all
+  gather_facts: true
+  vars:
+    rsyslog_server: "{{ '' if ansible_facts.os_family == 'RedHat' else 'rsyslog-collector.test' }}"
+    rsyslog_imjournal_ratelimit_interval: 300
+    rsyslog_imjournal_ratelimit_burst: 2
+    __rsyslog_stats_log: "{{ '/var/log/syslog' if ansible_facts.os_family == 'Debian' else '/var/log/messages' }}"
+  pre_tasks:
+    - name: Enable journal input statistics for the rate-limit test
+      become: true
+      become_user: root
+      ansible.builtin.copy:
+        dest: /etc/rsyslog.d/99-molecule-journal-stats.conf
+        mode: '0644'
+        content: |
+          module(load="impstats" interval="1" log.syslog="off" log.file="{{ __rsyslog_stats_log }}")
+  roles:
+    - role: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
+  post_tasks:
+    - name: Write more journal records than the burst allows
+      ansible.builtin.command: systemd-cat -t molecule-limited seq 1 12
+      register: __rsyslog_limited_probe
+      changed_when: __rsyslog_limited_probe.rc == 0
+      failed_when: __rsyslog_limited_probe.rc != 0
+
+    - name: Wait for imjournal to report two accepted records and subsequent drops
+      become: true
+      become_user: root
+      ansible.builtin.wait_for:
+        path: "{{ __rsyslog_stats_log }}"
+        search_regex: 'imjournal: origin=imjournal .*submitted=2\b.*discarded=[1-9][0-9]*'
+        timeout: 45
+
+    - name: Remove the test statistics configuration
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: /etc/rsyslog.d/99-molecule-journal-stats.conf
+        state: absent
+
 - name: Verify mutual TLS and an independent certificate identity
   hosts: all
   gather_facts: true
@@ -114,6 +155,8 @@
     rsyslog_client_key_file: /run/rsyslog-client.key
     rsyslog_min_severity: warning
     rsyslog_queue_max_disk_space: 64m
+    rsyslog_imjournal_ratelimit_interval: 0
+    rsyslog_imjournal_ratelimit_burst: 2
   pre_tasks:
     - name: Create the client identity trusted by the mutual TLS collector
       become: true
@@ -146,7 +189,12 @@
     - role: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   post_tasks:
     - name: Write records either side of the severity threshold
-      ansible.builtin.command: "systemd-cat -p {{ __rsyslog_priority }} -t molecule-mtls /bin/echo probe-{{ __rsyslog_priority }}"
+      ansible.builtin.command:
+        cmd: "systemd-cat -p {{ __rsyslog_priority }} -t molecule-mtls /bin/cat"
+        stdin: |-
+          probe-{{ __rsyslog_priority }}-1
+          probe-{{ __rsyslog_priority }}-2
+          probe-{{ __rsyslog_priority }}-3
       register: __rsyslog_priority_probe
       changed_when: __rsyslog_priority_probe.rc == 0
       failed_when: __rsyslog_priority_probe.rc != 0
@@ -155,15 +203,19 @@
         loop_var: __rsyslog_priority
         label: "{{ __rsyslog_priority }}"
 
-    - name: Wait for the warning on the authenticated connection
+    - name: Wait for every warning beyond the disabled burst limit on the authenticated connection
       ansible.builtin.wait_for:
         path: /var/log/molecule-collector-mtls
-        search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ molecule-mtls \d+ - - probe-warning$'
+        search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ molecule-mtls \d+ - - probe-warning-{{ __rsyslog_sequence }}$'
         timeout: 45
+      loop: [1, 2, 3]
+      loop_control:
+        loop_var: __rsyslog_sequence
+        label: "{{ __rsyslog_sequence }}"
 
     - name: Check that the less urgent notice stayed local
       ansible.builtin.command:
-        argv: [grep, -Ec, '^[0-9]+ <[0-9]+>1 [^ ]+ [^ ]+ molecule-mtls [0-9]+ - - probe-notice$', /var/log/molecule-collector-mtls]
+        argv: [grep, -Ec, '^[0-9]+ <[0-9]+>1 [^ ]+ [^ ]+ molecule-mtls [0-9]+ - - probe-notice-[123]$', /var/log/molecule-collector-mtls]
       register: __rsyslog_notice
       changed_when: false
       failed_when: __rsyslog_notice.rc != 1
@@ -191,6 +243,19 @@
   roles:
     - role: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   post_tasks:
+    - name: Verify restoring both defaults removed the journal rate-limit drop-in
+      ansible.builtin.wait_for:
+        path: /etc/rsyslog.d/00-imjournal.conf
+        state: absent
+        timeout: 3
+
+    - name: Verify the forwarding configuration defers to the journal input defaults
+      ansible.builtin.command:
+        argv: [grep, -Ei, 'ratelimit\.(interval|burst)', /etc/rsyslog.d/01-central.conf]
+      register: __rsyslog_default_limits
+      changed_when: false
+      failed_when: __rsyslog_default_limits.rc != 1
+
     - name: Write a journal record while the TCP collector is offline
       ansible.builtin.command: systemd-cat -p info -t molecule-buffer /bin/echo offline-journal-probe
       register: __rsyslog_offline_journal

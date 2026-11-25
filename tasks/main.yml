@@ -5,31 +5,61 @@
 - name: Gather facts and load platform settings
   ansible.builtin.import_tasks: set_vars.yml
 
-- name: Validate forwarding inputs
+- name: Validate journal and forwarding settings
   ansible.builtin.import_tasks: assert.yml
-  when: __rsyslog_forwarding
 
 - name: Install rsyslog with TLS support
   ansible.builtin.import_tasks: install.yml
+
+- name: Install the native snippet validation helper
+  become: true
+  become_user: root
+  ansible.builtin.copy:
+    src: rsyslog-validate-snippet
+    dest: /usr/local/sbin/rsyslog-validate-snippet
+    owner: root
+    group: root
+    mode: '0755'
+    backup: "{{ rsyslog_backup }}"
+  when: __rsyslog_forwarding or __rsyslog_journal_dropin
+
+- name: Configure rate limits for the distribution's journal input
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: imjournal.conf.j2
+    dest: /etc/rsyslog.d/00-imjournal.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: "{{ rsyslog_backup }}"
+    validate: "{{ __rsyslog_validate_config }} imjournal"
+  when: __rsyslog_journal_dropin
+  notify: restart rsyslog
 
 - name: Configure the remote sender
   ansible.builtin.import_tasks: forward.yml
   when: __rsyslog_forwarding
 
-- name: Remove managed forwarding configuration in local mode
+- name: Remove unused rsyslog drop-ins and validation helper
   become: true
   become_user: root
   ansible.builtin.file:
-    path: "{{ __rsyslog_sender_file }}"
+    path: "{{ __rsyslog_file.path }}"
     state: absent
   loop:
-    - /etc/rsyslog.d/01-central.conf
-    - /usr/local/sbin/rsyslog-validate-snippet
-    - /etc/apparmor.d/rsyslog.d/central-forwarding
+    - path: /etc/rsyslog.d/00-imjournal.conf
+      needed: "{{ __rsyslog_journal_dropin }}"
+    - path: /etc/rsyslog.d/01-central.conf
+      needed: "{{ __rsyslog_forwarding }}"
+    - path: /etc/apparmor.d/rsyslog.d/central-forwarding
+      needed: "{{ __rsyslog_forwarding }}"
+    - path: /usr/local/sbin/rsyslog-validate-snippet
+      needed: "{{ __rsyslog_forwarding or __rsyslog_journal_dropin }}"
   loop_control:
-    loop_var: __rsyslog_sender_file
-    label: "{{ __rsyslog_sender_file }}"
-  when: not __rsyslog_forwarding
+    loop_var: __rsyslog_file
+    label: "{{ __rsyslog_file.path }}"
+  when: not __rsyslog_file.needed
   notify: restart rsyslog
 
 - name: Validate the assembled configuration before starting rsyslog

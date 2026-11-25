@@ -3,6 +3,12 @@
 
 {% if ansible_facts.os_family != 'RedHat' %}
 module(load="imjournal" StateFile="{{ __rsyslog_state_directory }}/imjournal.state"
+{% if __rsyslog_custom_interval %}
+       Ratelimit.Interval="{{ rsyslog_imjournal_ratelimit_interval | int }}"
+{% endif %}
+{% if __rsyslog_custom_burst %}
+       Ratelimit.Burst="{{ rsyslog_imjournal_ratelimit_burst | int }}"
+{% endif %}
        PersistStateInterval="100")
 {% endif %}
 {% if __rsyslog_file_inputs %}

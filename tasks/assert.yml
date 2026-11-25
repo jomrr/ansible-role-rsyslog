@@ -2,43 +2,54 @@
 # role: rsyslog
 # file: tasks/assert.yml
 
-- name: assert | Check the forwarding destination and queue size
+- name: assert | Check journal input rate limits
   ansible.builtin.assert:
     that:
-      - rsyslog_server is match('^[A-Za-z0-9:][A-Za-z0-9.:-]*\Z')
-      - rsyslog_port | int >= 1
-      - rsyslog_port | int <= 65535
-      - rsyslog_queue_max_disk_space is match('^[1-9][0-9]*[kKmMgGtT]?\Z')
-    fail_msg: Supply a receiver address, a port from 1 to 65535 and a positive queue size such as 256m.
+      - 0 <= rsyslog_imjournal_ratelimit_interval | int <= 2147483647
+      - 0 <= rsyslog_imjournal_ratelimit_burst | int <= 2147483647
+    fail_msg: Supply nonnegative 32-bit integers for the journal rate-limit interval and burst.
     quiet: true
 
-- name: assert | Check the TLS identity and certificate paths
-  ansible.builtin.assert:
-    that:
-      - rsyslog_permitted_peers | length > 0
-      - rsyslog_permitted_peers | reject('match', '^(\*\.)?[A-Za-z0-9:][A-Za-z0-9.:-]*\Z') | list | length == 0
-      - (rsyslog_client_cert_file == '') == (rsyslog_client_key_file == '')
-      - >-
-        [rsyslog_ca_file, rsyslog_client_cert_file, rsyslog_client_key_file]
-        | reject('equalto', '') | reject('match', '^/[-A-Za-z0-9_./+]+\Z') | list | length == 0
-    fail_msg: Supply permitted certificate names and absolute PEM paths. Mutual TLS requires both the client certificate and its key.
-    quiet: true
-  when: rsyslog_transport == 'tls'
+- name: assert | Check forwarding settings
+  when: __rsyslog_forwarding
+  block:
+    - name: assert | Check the forwarding destination and queue size
+      ansible.builtin.assert:
+        that:
+          - rsyslog_server is match('^[A-Za-z0-9:][A-Za-z0-9.:-]*\Z')
+          - rsyslog_port | int >= 1
+          - rsyslog_port | int <= 65535
+          - rsyslog_queue_max_disk_space is match('^[1-9][0-9]*[kKmMgGtT]?\Z')
+        fail_msg: Supply a receiver address, a port from 1 to 65535 and a positive queue size such as 256m.
+        quiet: true
 
-- name: assert | Check text log paths, tags and facilities
-  ansible.builtin.assert:
-    that:
-      - __rsyslog_input.keys() | difference(['path', 'tag', 'facility']) | length == 0
-      - __rsyslog_input.path is defined and __rsyslog_input.path is string
-      - __rsyslog_input.path is match('^/([-A-Za-z0-9_.+]+/)*[-A-Za-z0-9_.+]+\Z')
-      - __rsyslog_input.tag is undefined or (__rsyslog_input.tag is string and __rsyslog_input.tag is match('^[-A-Za-z0-9_.+]+:?\Z'))
-      - >-
-        __rsyslog_input.facility is undefined or __rsyslog_input.facility in
-        ['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr', 'news', 'uucp', 'cron', 'authpriv', 'ftp',
-         'local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7']
-    fail_msg: Supply an absolute text file path and, optionally, a syslog tag and facility.
-    quiet: true
-  loop: "{{ __rsyslog_file_inputs }}"
-  loop_control:
-    loop_var: __rsyslog_input
-    label: "{{ __rsyslog_input.path | default('missing path') }}"
+    - name: assert | Check the TLS identity and certificate paths
+      ansible.builtin.assert:
+        that:
+          - rsyslog_permitted_peers | length > 0
+          - rsyslog_permitted_peers | reject('match', '^(\*\.)?[A-Za-z0-9:][A-Za-z0-9.:-]*\Z') | list | length == 0
+          - (rsyslog_client_cert_file == '') == (rsyslog_client_key_file == '')
+          - >-
+            [rsyslog_ca_file, rsyslog_client_cert_file, rsyslog_client_key_file]
+            | reject('equalto', '') | reject('match', '^/[-A-Za-z0-9_./+]+\Z') | list | length == 0
+        fail_msg: Supply permitted certificate names and absolute PEM paths. Mutual TLS requires both the client certificate and its key.
+        quiet: true
+      when: rsyslog_transport == 'tls'
+
+    - name: assert | Check text log paths, tags and facilities
+      ansible.builtin.assert:
+        that:
+          - __rsyslog_input.keys() | difference(['path', 'tag', 'facility']) | length == 0
+          - __rsyslog_input.path is defined and __rsyslog_input.path is string
+          - __rsyslog_input.path is match('^/([-A-Za-z0-9_.+]+/)*[-A-Za-z0-9_.+]+\Z')
+          - __rsyslog_input.tag is undefined or (__rsyslog_input.tag is string and __rsyslog_input.tag is match('^[-A-Za-z0-9_.+]+:?\Z'))
+          - >-
+            __rsyslog_input.facility is undefined or __rsyslog_input.facility in
+            ['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr', 'news', 'uucp', 'cron', 'authpriv', 'ftp',
+             'local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7']
+        fail_msg: Supply an absolute text file path and, optionally, a syslog tag and facility.
+        quiet: true
+      loop: "{{ __rsyslog_file_inputs }}"
+      loop_control:
+        loop_var: __rsyslog_input
+        label: "{{ __rsyslog_input.path | default('missing path') }}"

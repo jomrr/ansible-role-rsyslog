@@ -11,6 +11,12 @@ rsyslog_backup: true
 # Stop processing messages before the distribution's local rules when forwarding.
 rsyslog_forward_only: false
 
+# Journal input rate-limit window in seconds, with zero disabling the limit.
+rsyslog_imjournal_ratelimit_interval: 600
+
+# Maximum journal records accepted during each rate-limit window.
+rsyslog_imjournal_ratelimit_burst: 20000
+
 # Transport used for forwarding to the receiver.
 # Choices: tls, tcp
 rsyslog_transport: tls

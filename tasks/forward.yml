@@ -35,17 +35,6 @@
   when: ansible_facts.distribution == 'Ubuntu'
   notify: restart rsyslog
 
-- name: forward | Install the native snippet validation helper
-  become: true
-  become_user: root
-  ansible.builtin.copy:
-    src: rsyslog-validate-snippet
-    dest: /usr/local/sbin/rsyslog-validate-snippet
-    owner: root
-    group: root
-    mode: '0755'
-    backup: "{{ rsyslog_backup }}"
-
 - name: forward | Configure forwarding
   become: true
   become_user: root

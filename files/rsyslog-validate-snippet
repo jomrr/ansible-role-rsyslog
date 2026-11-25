@@ -4,5 +4,9 @@ set -eu
 # The Ubuntu rsyslogd AppArmor profile permits configuration reads in this directory.
 candidate=$(mktemp /etc/rsyslog.d/.validate-XXXXXXXX)
 trap 'rm -f -- "$candidate"' EXIT
-cat -- "$1" > "$candidate"
+if [ "${2:-}" = imjournal ]; then
+    # Red Hat loads imjournal in the main configuration before including drop-ins.
+    echo 'module(load="imjournal")' > "$candidate"
+fi
+cat -- "$1" >> "$candidate"
 /usr/sbin/rsyslogd -N3 -f "$candidate"

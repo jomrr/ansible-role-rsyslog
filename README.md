@@ -21,6 +21,7 @@ against the system trust store by default.
 
 - The enabled rsyslog service, its GnuTLS module and the system CA certificates
   on every host.
+- Rate limiting for the active rsyslog journal input.
 - With a receiver configured, a forwarding drop-in, a disk-assisted queue, and
   any explicitly selected text log inputs.
 
@@ -61,8 +62,8 @@ collections:
 
 Type: `bool`. Required: `false`.
 
-Back up the forwarding drop-in, AppArmor extension and validation helper before
-replacing their contents.
+Back up managed files before changing their contents, including the Red Hat
+journal input configuration.
 
 Default:
 
@@ -89,6 +90,32 @@ Default:
 
 ```yaml
 rsyslog_forward_only: false
+```
+
+### `rsyslog_imjournal_ratelimit_interval`
+
+Type: `int`. Required: `false`.
+
+Rate-limit window in seconds for the rsyslog journal input. Set to 0 to disable
+its rate limit.
+
+Default:
+
+```yaml
+rsyslog_imjournal_ratelimit_interval: 600
+```
+
+### `rsyslog_imjournal_ratelimit_burst`
+
+Type: `int`. Required: `false`.
+
+Maximum number of journal records accepted per window. Ignored when the interval
+is 0.
+
+Default:
+
+```yaml
+rsyslog_imjournal_ratelimit_burst: 20000
 ```
 
 ### `rsyslog_transport`
@@ -209,6 +236,7 @@ rsyslog_additional_files: []
 
 ## Managed Files
 
+- `/etc/rsyslog.d/00-imjournal.conf`
 - `/etc/rsyslog.d/01-central.conf`
 - `/etc/apparmor.d/rsyslog.d/central-forwarding`
 - `/usr/local/sbin/rsyslog-validate-snippet`
@@ -221,10 +249,11 @@ account already installed.
 ## Service Behavior
 
 Removing rsyslog_server or setting it to an empty string removes the role's
-forwarding drop-in, Ubuntu AppArmor extension and validation helper. rsyslog
-continues running with the local rules. The role validates the assembled
-configuration before starting the service. Applying the same settings again
-keeps the running service in place.
+forwarding drop-in and Ubuntu AppArmor extension. The validation helper is
+removed when no managed rsyslog drop-in needs it. rsyslog continues running with
+the local rules. The role validates the assembled configuration before starting
+the service. Applying the same settings again keeps the running service in
+place.
 
 ### Handlers
 
@@ -233,6 +262,16 @@ keeps the running service in place.
 
 ## Operational Notes
 
+- By default imjournal accepts 20000 records per 600 seconds. Records it
+  discards never reach the forwarding queue. Set
+  `rsyslog_imjournal_ratelimit_interval: 0` to read without this limit, or tune
+  `rsyslog_imjournal_ratelimit_burst` for a finite window.
+- Each parameter at its default is omitted. On AlmaLinux and Fedora, the
+  distribution loads imjournal and then reads the role's rate-limit overrides
+  from `/etc/rsyslog.d/00-imjournal.conf` in both local and forwarding mode.
+  Restoring both defaults removes this drop-in. On Debian, Ubuntu and openSUSE,
+  the role sets overrides on its own imjournal module when forwarding is
+  enabled. Journald has its own rate limits.
 - Journal forwarding uses imjournal directly, even with ForwardToSyslog
   disabled. By default, Red Hat also writes journal events to files such as
   /var/log/messages and /var/log/secure. Debian and Ubuntu can write copies from
@@ -302,6 +341,7 @@ keeps the running service in place.
     - role: jomrr.rsyslog
       rsyslog_server: logs.example.org
       rsyslog_forward_only: true
+      rsyslog_imjournal_ratelimit_interval: 0
 ```
 
 ### Authenticate a sender and select application logs

@@ -1,0 +1,9 @@
+{{ ansible_managed | comment(prefix_count=0, postfix_count=0) }}
+# file: {{ template_destpath }}
+
+{% if __rsyslog_custom_interval %}
+$imjournalRatelimitInterval {{ rsyslog_imjournal_ratelimit_interval | int }}
+{% endif %}
+{% if __rsyslog_custom_burst %}
+$imjournalRatelimitBurst {{ rsyslog_imjournal_ratelimit_burst | int }}
+{% endif %}
