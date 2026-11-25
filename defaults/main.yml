@@ -40,6 +40,10 @@ rsyslog_permitted_peers: "{{ [rsyslog_server] if __rsyslog_forwarding else [] }}
 # Choices: emerg, alert, crit, err, warning, notice, info, debug
 rsyslog_min_severity: info
 
+# Exact rsyslog program names excluded from remote forwarding.
+rsyslog_excluded_programs: []
+# rsyslog_excluded_programs: [loki]
+
 # Disk budget for the forwarding action queue in rsyslog size units.
 rsyslog_queue_max_disk_space: 256m
 

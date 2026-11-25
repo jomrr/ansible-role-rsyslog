@@ -195,6 +195,19 @@ Default:
 rsyslog_min_severity: info
 ```
 
+### `rsyslog_excluded_programs`
+
+Type: `list`. Required: `false`.
+
+Skip remote forwarding for journal and file records whose rsyslog programname
+exactly matches a listed name. Matching is case-sensitive.
+
+Default:
+
+```yaml
+rsyslog_excluded_programs: []
+```
+
 ### `rsyslog_queue_max_disk_space`
 
 Type: `str`. Required: `false`.
@@ -264,6 +277,11 @@ place.
 
 ## Operational Notes
 
+- On the collector host, set `rsyslog_excluded_programs: [loki]` to keep Loki's
+  own messages in the local journal and avoid sending them back to Loki. The
+  filter compares the rsyslog `programname` before queuing a message for
+  forwarding. For text file inputs, rsyslog derives this name from the input
+  tag.
 - By default imjournal accepts 20000 records per 600 seconds. Records it
   discards never reach the forwarding queue. Set
   `rsyslog_imjournal_ratelimit_interval: 0` to read without this limit, or tune

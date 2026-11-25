@@ -88,6 +88,13 @@ argument_specs:
         description:
           - Least urgent severity forwarded. For example, warning includes emerg through
             warning.
+      rsyslog_excluded_programs:
+        type: list
+        elements: str
+        default: []
+        description:
+          - Skip remote forwarding for journal and file records whose rsyslog programname
+            exactly matches a listed name. Matching is case-sensitive.
       rsyslog_queue_max_disk_space:
         type: str
         default: 256m

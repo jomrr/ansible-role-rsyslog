@@ -63,8 +63,8 @@
       changed_when: __rsyslog_dnf_probe.rc == 0
       failed_when: __rsyslog_dnf_probe.rc != 0
 
-    - name: Write an info record to the journal
-      ansible.builtin.command: systemd-cat -p info -t molecule-journal /bin/echo central-journal-probe
+    - name: Write an info record from Loki with the default empty exclusion list
+      ansible.builtin.command: systemd-cat -p info -t loki /bin/echo central-journal-probe
       register: __rsyslog_info_probe
       changed_when: __rsyslog_info_probe.rc == 0
       failed_when: __rsyslog_info_probe.rc != 0
@@ -72,13 +72,13 @@
     - name: Wait for the journal record at the default TLS port
       ansible.builtin.wait_for:
         path: /var/log/molecule-collector-tls
-        search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ molecule-journal \d+ - - central-journal-probe$'
+        search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ loki \d+ - - central-journal-probe$'
         timeout: 45
 
     - name: Send the control record to the distribution's local socket input
       ansible.builtin.command:
         cmd: socat -u STDIN UNIX-SENDTO:/run/systemd/journal/syslog
-        stdin: '<14>molecule-journal: central-journal-probe'
+        stdin: '<14>loki: central-journal-probe'
       register: __rsyslog_socket_control
       changed_when: __rsyslog_socket_control.rc == 0
       failed_when: __rsyslog_socket_control.rc != 0
@@ -89,7 +89,7 @@
       become_user: root
       ansible.builtin.wait_for:
         path: "{{ '/var/log/syslog' if ansible_facts.os_family == 'Debian' else '/var/log/messages' }}"
-        search_regex: 'molecule-journal(?:\[\d+\])?: central-journal-probe'
+        search_regex: 'loki(?:\[\d+\])?: central-journal-probe'
         timeout: 45
 
     - name: Check that debug and DNF records were excluded
@@ -227,9 +227,11 @@
     rsyslog_server: 127.0.0.1
     rsyslog_transport: tcp
     rsyslog_forward_only: true
+    rsyslog_excluded_programs: [loki, excluded.log]
     rsyslog_platform_files: [/var/log/molecule-platform.log]
     rsyslog_additional_files:
       - /var/log/molecule-extra.log
+      - /var/log/excluded.log
       - path: /var/log/sssd/*.log
         tag: sssd
         facility: local3
@@ -266,11 +268,15 @@
       changed_when: false
       failed_when: __rsyslog_default_limits.rc != 1
 
-    - name: Write a journal record while the TCP collector is offline
-      ansible.builtin.command: systemd-cat -p info -t molecule-buffer /bin/echo offline-journal-probe
+    - name: Write journal records from Loki and a similarly named program while the collector is offline
+      ansible.builtin.command: systemd-cat -p info -t {{ __rsyslog_program }} /bin/echo offline-journal-{{ __rsyslog_program }}-probe
       register: __rsyslog_offline_journal
       changed_when: __rsyslog_offline_journal.rc == 0
       failed_when: __rsyslog_offline_journal.rc != 0
+      loop: [loki, loki-canary]
+      loop_control:
+        loop_var: __rsyslog_program
+        label: "{{ __rsyslog_program }}"
 
     - name: Send a separate record directly to the distribution's syslog socket
       ansible.builtin.command:
@@ -288,7 +294,7 @@
         dest: "/var/log/{{ __rsyslog_source }}"
         content: "probe-{{ __rsyslog_source }}\n"
         mode: '0644'
-      loop: [molecule-platform.log, molecule-extra.log, sssd/domain-one.log, sssd/pam.log, sssd/worker1.out, sssd/workera.out]
+      loop: [molecule-platform.log, molecule-extra.log, excluded.log, sssd/domain-one.log, sssd/pam.log, sssd/worker1.out, sssd/workera.out]
       loop_control:
         loop_var: __rsyslog_source
         label: "{{ __rsyslog_source }}"
@@ -324,8 +330,16 @@
     - name: Wait for the buffered journal record at the TCP collector
       ansible.builtin.wait_for:
         path: /var/log/molecule-collector-tcp
-        search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ molecule-buffer \d+ - - offline-journal-probe$'
+        search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ loki-canary \d+ - - offline-journal-loki-canary-probe$'
         timeout: 45
+
+    - name: Verify the excluded Loki record is still in the local journal
+      become: true
+      become_user: root
+      ansible.builtin.command: journalctl -b -t loki -o cat --grep=^offline-journal-loki-probe$ --lines=1
+      register: __rsyslog_local_loki
+      changed_when: false
+      failed_when: __rsyslog_local_loki.rc != 0 or __rsyslog_local_loki.stdout != 'offline-journal-loki-probe'
 
     - name: Verify the journal and socket probes bypassed the distribution's local file
       become: true
@@ -334,7 +348,7 @@
         argv:
           - grep
           - -E
-          - 'molecule-(buffer|socket)(\[[0-9]+\])?: offline-(journal|socket)-probe'
+          - '(loki(-canary)?|molecule-socket)(\[[0-9]+\])?: offline-(journal-loki(-canary)?|socket)-probe'
           - "{{ '/var/log/syslog' if ansible_facts.os_family == 'Debian' else '/var/log/messages' }}"
       register: __rsyslog_local_probes
       changed_when: false
@@ -357,9 +371,13 @@
         loop_var: __rsyslog_probe
         label: "{{ __rsyslog_probe.source }}"
 
-    - name: Verify the nonmatching file stayed local
+    - name: Verify the collector received neither excluded program nor the nonmatching file
       ansible.builtin.command:
-        argv: [grep, -F, probe-sssd/workera.out, /var/log/molecule-collector-tcp]
-      register: __rsyslog_unmatched
+        argv:
+          - grep
+          - -E
+          - ' - - (offline-journal-loki-probe|probe-excluded\.log|probe-sssd/workera\.out)$'
+          - /var/log/molecule-collector-tcp
+      register: __rsyslog_excluded_records
       changed_when: false
-      failed_when: __rsyslog_unmatched.rc != 1
+      failed_when: __rsyslog_excluded_records.rc != 1

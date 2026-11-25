@@ -16,7 +16,11 @@ module(load="imfile" statefile.directory="{{ __rsyslog_state_directory }}")
 {% endif %}
 
 ruleset(name="central_forward") {
-    if prifilt("*.{{ rsyslog_min_severity }}") then
+    if prifilt("*.{{ rsyslog_min_severity }}")
+{% if rsyslog_excluded_programs %}
+       and not ($programname == {{ rsyslog_excluded_programs | to_json(ensure_ascii=false) | replace('$', '\\$') }})
+{% endif %}
+    then
         action(type="omfwd" target="{{ rsyslog_server }}" port="{{ rsyslog_port }}" protocol="tcp"
                template="RSYSLOG_SyslogProtocol23Format" TCP_Framing="octet-counted"
 {% if rsyslog_transport == 'tls' %}
