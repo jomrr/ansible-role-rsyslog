@@ -2,13 +2,13 @@
 # role: rsyslog
 # file: molecule/resources/playbooks/receivers.yml
 
-- name: RSYSLOG | Prepare the GitHub-hosted runner for guest daemons
+- name: Prepare the GitHub-hosted runner for guest daemons
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
     # Rootless containers inherit the runner's executable attachment for /usr/sbin/rsyslogd.
-    - name: RSYSLOG | Unload the runner's rsyslog profile before starting guest services
+    - name: Unload the runner's rsyslog profile before starting guest services
       become: true
       become_user: root
       ansible.builtin.command:
@@ -19,10 +19,10 @@
       failed_when: __rsyslog_profile_removal.rc != 0
       when: lookup('ansible.builtin.env', 'RUNNER_ENVIRONMENT') == 'github-hosted'
 
-- name: RSYSLOG | Refresh package metadata
+- name: Refresh package metadata
   ansible.builtin.import_playbook: prepare.yml
 
-- name: RSYSLOG | Prepare loopback collectors
+- name: Prepare loopback collectors
   hosts: all
   gather_facts: true
   vars:
@@ -31,7 +31,7 @@
       RedHat: /etc/pki/ca-trust/source/anchors
       Suse: /etc/pki/trust/anchors
   tasks:
-    - name: RSYSLOG | Resolve the test receiver to its IPv4 loopback listener
+    - name: Resolve the test receiver to its IPv4 loopback listener
       become: true
       become_user: root
       ansible.builtin.lineinfile:
@@ -39,14 +39,14 @@
         line: '127.0.0.1 rsyslog-collector.test'
         unsafe_writes: true  # Podman bind-mounts /etc/hosts.
 
-    - name: RSYSLOG | Install collector tools
+    - name: Install collector tools
       become: true
       become_user: root
       ansible.builtin.package:
         name: [socat, openssl, ca-certificates]
         state: present
 
-    - name: RSYSLOG | Create a certificate for the TLS collector
+    - name: Create a certificate for the TLS collector
       become: true
       become_user: root
       ansible.builtin.command:
@@ -59,7 +59,7 @@
       changed_when: __rsyslog_collector_cert.start is not none
       failed_when: __rsyslog_collector_cert.rc != 0
 
-    - name: RSYSLOG | Trust the test collector through the platform CA store
+    - name: Trust the test collector through the platform CA store
       become: true
       become_user: root
       ansible.builtin.copy:
@@ -67,9 +67,9 @@
         remote_src: true
         dest: "{{ __rsyslog_anchor_dirs[ansible_facts.os_family] }}/molecule-collector.crt"
         mode: '0644'
-      notify: RSYSLOG | Refresh the platform CA bundle
+      notify: Refresh the platform CA bundle
 
-    - name: RSYSLOG | Install the loopback collector units
+    - name: Install the loopback collector units
       become: true
       become_user: root
       ansible.builtin.copy:
@@ -91,7 +91,7 @@
         loop_var: __rsyslog_collector
         label: "{{ __rsyslog_collector.name }}"
 
-    - name: RSYSLOG | Start the TCP and TLS collectors
+    - name: Start the TCP and TLS collectors
       become: true
       become_user: root
       ansible.builtin.systemd_service:
@@ -104,7 +104,7 @@
         label: "{{ __rsyslog_transport }}"
 
   handlers:
-    - name: RSYSLOG | Refresh the platform CA bundle
+    - name: Refresh the platform CA bundle
       become: true
       become_user: root
       ansible.builtin.command: "{{ 'update-ca-trust' if ansible_facts.os_family == 'RedHat' else 'update-ca-certificates' }}"

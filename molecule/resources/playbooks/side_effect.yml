@@ -2,7 +2,7 @@
 # role: rsyslog
 # file: molecule/resources/playbooks/side_effect.yml
 
-- name: RSYSLOG | Enable forwarding without play-level facts
+- name: Enable forwarding without play-level facts
   hosts: all
   gather_facts: false
   vars:
@@ -10,49 +10,49 @@
   roles:
     - role: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   post_tasks:
-    - name: RSYSLOG | Read the active forwarding service invocation
+    - name: Read the active forwarding service invocation
       ansible.builtin.systemd_service:
         name: rsyslog.service
         state: started
       check_mode: true
       register: __rsyslog_before_reapply
 
-- name: RSYSLOG | Reapply and verify default TLS forwarding
+- name: Reapply and verify default TLS forwarding
   hosts: all
   gather_facts: true
   vars:
     rsyslog_server: rsyslog-collector.test
   tasks:
-    - name: RSYSLOG | Preview the current forwarding settings
+    - name: Preview the current forwarding settings
       ansible.builtin.import_role:
         name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
       check_mode: true
 
-    - name: RSYSLOG | Reapply the current forwarding settings
+    - name: Reapply the current forwarding settings
       ansible.builtin.import_role:
         name: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   post_tasks:
-    - name: RSYSLOG | Read the forwarding service invocation after reapplication
+    - name: Read the forwarding service invocation after reapplication
       ansible.builtin.systemd_service:
         name: rsyslog.service
         state: started
       check_mode: true
       register: __rsyslog_after_reapply
 
-    - name: RSYSLOG | Verify unchanged settings kept the sender running
+    - name: Verify unchanged settings kept the sender running
       ansible.builtin.assert:
         that:
           - __rsyslog_after_reapply.status.ActiveState == 'active'
           - __rsyslog_after_reapply.status.InvocationID == __rsyslog_before_reapply.status.InvocationID
         quiet: true
 
-    - name: RSYSLOG | Write a debug record to the journal
+    - name: Write a debug record to the journal
       ansible.builtin.command: systemd-cat -p debug -t molecule-journal /bin/echo filtered-debug-probe
       register: __rsyslog_debug_probe
       changed_when: __rsyslog_debug_probe.rc == 0
       failed_when: __rsyslog_debug_probe.rc != 0
 
-    - name: RSYSLOG | Append a file record to the active DNF log
+    - name: Append a file record to the active DNF log
       become: true
       become_user: root
       ansible.builtin.command:
@@ -63,19 +63,19 @@
       changed_when: __rsyslog_dnf_probe.rc == 0
       failed_when: __rsyslog_dnf_probe.rc != 0
 
-    - name: RSYSLOG | Write an info record to the journal
+    - name: Write an info record to the journal
       ansible.builtin.command: systemd-cat -p info -t molecule-journal /bin/echo central-journal-probe
       register: __rsyslog_info_probe
       changed_when: __rsyslog_info_probe.rc == 0
       failed_when: __rsyslog_info_probe.rc != 0
 
-    - name: RSYSLOG | Wait for the journal record at the default TLS port
+    - name: Wait for the journal record at the default TLS port
       ansible.builtin.wait_for:
         path: /var/log/molecule-collector-tls
         search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ molecule-journal \d+ - - central-journal-probe$'
         timeout: 45
 
-    - name: RSYSLOG | Send the control record to the distribution's local socket input
+    - name: Send the control record to the distribution's local socket input
       ansible.builtin.command:
         cmd: socat -u STDIN UNIX-SENDTO:/run/systemd/journal/syslog
         stdin: '<14>molecule-journal: central-journal-probe'
@@ -84,7 +84,7 @@
       failed_when: __rsyslog_socket_control.rc != 0
       when: ansible_facts.os_family != 'RedHat'
 
-    - name: RSYSLOG | Verify local file logging with default forwarding
+    - name: Verify local file logging with default forwarding
       become: true
       become_user: root
       ansible.builtin.wait_for:
@@ -92,7 +92,7 @@
         search_regex: 'molecule-journal(?:\[\d+\])?: central-journal-probe'
         timeout: 45
 
-    - name: RSYSLOG | Check that debug and DNF records were excluded
+    - name: Check that debug and DNF records were excluded
       ansible.builtin.command:
         argv:
           - grep
@@ -103,7 +103,7 @@
       changed_when: false
       failed_when: __rsyslog_excluded.rc != 1
 
-- name: RSYSLOG | Verify mutual TLS and an independent certificate identity
+- name: Verify mutual TLS and an independent certificate identity
   hosts: all
   gather_facts: true
   vars:
@@ -115,7 +115,7 @@
     rsyslog_min_severity: warning
     rsyslog_queue_max_disk_space: 64m
   pre_tasks:
-    - name: RSYSLOG | Create the client identity trusted by the mutual TLS collector
+    - name: Create the client identity trusted by the mutual TLS collector
       become: true
       become_user: root
       ansible.builtin.command:
@@ -127,7 +127,7 @@
       changed_when: __rsyslog_client_cert.start is not none
       failed_when: __rsyslog_client_cert.rc != 0
 
-    - name: RSYSLOG | Grant the Ubuntu service account read access to the client key
+    - name: Grant the Ubuntu service account read access to the client key
       become: true
       become_user: root
       ansible.builtin.file:
@@ -136,7 +136,7 @@
         mode: '0640'
       when: ansible_facts.distribution == 'Ubuntu'
 
-    - name: RSYSLOG | Start a collector requiring the trusted client certificate
+    - name: Start a collector requiring the trusted client certificate
       become: true
       become_user: root
       ansible.builtin.systemd_service:
@@ -145,7 +145,7 @@
   roles:
     - role: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   post_tasks:
-    - name: RSYSLOG | Write records either side of the severity threshold
+    - name: Write records either side of the severity threshold
       ansible.builtin.command: "systemd-cat -p {{ __rsyslog_priority }} -t molecule-mtls /bin/echo probe-{{ __rsyslog_priority }}"
       register: __rsyslog_priority_probe
       changed_when: __rsyslog_priority_probe.rc == 0
@@ -155,20 +155,20 @@
         loop_var: __rsyslog_priority
         label: "{{ __rsyslog_priority }}"
 
-    - name: RSYSLOG | Wait for the warning on the authenticated connection
+    - name: Wait for the warning on the authenticated connection
       ansible.builtin.wait_for:
         path: /var/log/molecule-collector-mtls
         search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ molecule-mtls \d+ - - probe-warning$'
         timeout: 45
 
-    - name: RSYSLOG | Check that the less urgent notice stayed local
+    - name: Check that the less urgent notice stayed local
       ansible.builtin.command:
         argv: [grep, -Ec, '^[0-9]+ <[0-9]+>1 [^ ]+ [^ ]+ molecule-mtls [0-9]+ - - probe-notice$', /var/log/molecule-collector-mtls]
       register: __rsyslog_notice
       changed_when: false
       failed_when: __rsyslog_notice.rc != 1
 
-- name: RSYSLOG | Buffer journal and file inputs on a pure TCP forwarder
+- name: Buffer journal and file inputs on a pure TCP forwarder
   hosts: all
   gather_facts: true
   vars:
@@ -182,7 +182,7 @@
         tag: myapp
         facility: local3
   pre_tasks:
-    - name: RSYSLOG | Take the TCP collector offline
+    - name: Take the TCP collector offline
       become: true
       become_user: root
       ansible.builtin.systemd_service:
@@ -191,13 +191,13 @@
   roles:
     - role: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   post_tasks:
-    - name: RSYSLOG | Write a journal record while the TCP collector is offline
+    - name: Write a journal record while the TCP collector is offline
       ansible.builtin.command: systemd-cat -p info -t molecule-buffer /bin/echo offline-journal-probe
       register: __rsyslog_offline_journal
       changed_when: __rsyslog_offline_journal.rc == 0
       failed_when: __rsyslog_offline_journal.rc != 0
 
-    - name: RSYSLOG | Send a separate record directly to the distribution's syslog socket
+    - name: Send a separate record directly to the distribution's syslog socket
       ansible.builtin.command:
         cmd: socat -u STDIN UNIX-SENDTO:/run/systemd/journal/syslog
         stdin: '<14>molecule-socket: offline-socket-probe'
@@ -206,7 +206,7 @@
       failed_when: __rsyslog_offline_socket.rc != 0
       when: ansible_facts.os_family != 'RedHat'
 
-    - name: RSYSLOG | Create selected text inputs after the daemon has restarted
+    - name: Create selected text inputs after the daemon has restarted
       become: true
       become_user: root
       ansible.builtin.copy:
@@ -218,41 +218,41 @@
         loop_var: __rsyslog_source
         label: "{{ __rsyslog_source }}"
 
-    - name: RSYSLOG | Stop the sender while the TCP collector is offline
+    - name: Stop the sender while the TCP collector is offline
       become: true
       become_user: root
       ansible.builtin.systemd_service:
         name: rsyslog.service
         state: stopped
 
-    - name: RSYSLOG | Remove a consumed input so only the saved queue can deliver its record
+    - name: Remove a consumed input so only the saved queue can deliver its record
       become: true
       become_user: root
       ansible.builtin.file:
         path: /var/log/molecule-extra.log
         state: absent
 
-    - name: RSYSLOG | Bring the TCP collector back online
+    - name: Bring the TCP collector back online
       become: true
       become_user: root
       ansible.builtin.systemd_service:
         name: molecule-syslog-tcp.service
         state: started
 
-    - name: RSYSLOG | Start the sender with its saved queue
+    - name: Start the sender with its saved queue
       become: true
       become_user: root
       ansible.builtin.systemd_service:
         name: rsyslog.service
         state: started
 
-    - name: RSYSLOG | Wait for the buffered journal record at the TCP collector
+    - name: Wait for the buffered journal record at the TCP collector
       ansible.builtin.wait_for:
         path: /var/log/molecule-collector-tcp
         search_regex: '(?m)^[0-9]+ <[0-9]+>1 \S+ \S+ molecule-buffer \d+ - - offline-journal-probe$'
         timeout: 45
 
-    - name: RSYSLOG | Verify the journal and socket probes bypassed the distribution's local file
+    - name: Verify the journal and socket probes bypassed the distribution's local file
       become: true
       become_user: root
       ansible.builtin.command:
@@ -265,7 +265,7 @@
       changed_when: false
       failed_when: __rsyslog_local_probes.rc != 1
 
-    - name: RSYSLOG | Verify octet-counted TCP records with default and custom file metadata
+    - name: Verify octet-counted TCP records with default and custom file metadata
       ansible.builtin.wait_for:
         path: /var/log/molecule-collector-tcp
         search_regex: '(?m)^[0-9]+ <{{ __rsyslog_probe.pri }}>1 \S+ \S+ {{ __rsyslog_probe.tag }} - - - probe-{{ __rsyslog_probe.source }}$'

@@ -2,17 +2,17 @@
 # role: rsyslog
 # file: molecule/resources/playbooks/verify.yml
 
-- name: RSYSLOG | Verify local operation
+- name: Verify local operation
   hosts: all
   gather_facts: false
   tasks:
-    - name: RSYSLOG | Read the installed packages
+    - name: Read the installed packages
       ansible.builtin.package_facts:
 
-    - name: RSYSLOG | Read the installed services
+    - name: Read the installed services
       ansible.builtin.service_facts:
 
-    - name: RSYSLOG | Check that the local service runs with TLS support installed
+    - name: Check that the local service runs with TLS support installed
       ansible.builtin.assert:
         that:
           - "'ca-certificates' in ansible_facts.packages"
@@ -21,7 +21,7 @@
           - ansible_facts.services['rsyslog.service'].status == 'enabled'
         quiet: true
 
-    - name: RSYSLOG | Validate the local configuration
+    - name: Validate the local configuration
       become: true
       become_user: root
       ansible.builtin.command: rsyslogd -N1
@@ -29,13 +29,13 @@
       changed_when: false
       failed_when: __rsyslog_local_validation.rc != 0
 
-    - name: RSYSLOG | Check the managed remote action is absent
+    - name: Check the managed remote action is absent
       ansible.builtin.wait_for:
         path: /etc/rsyslog.d/01-central.conf
         state: absent
         timeout: 3
 
-    - name: RSYSLOG | Check the TCP collector has no sender connection
+    - name: Check the TCP collector has no sender connection
       ansible.builtin.wait_for:
         host: 127.0.0.1
         port: 514

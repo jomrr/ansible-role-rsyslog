@@ -2,7 +2,7 @@
 # role: rsyslog
 # file: handlers/main.yml
 
-- name: RSYSLOG | Validate the assembled configuration before restarting rsyslog
+- name: Validate the assembled configuration before restarting rsyslog
   become: true
   become_user: root
   ansible.builtin.command: "{{ __rsyslog_validate_service }}"
@@ -11,7 +11,7 @@
   failed_when: __rsyslog_restart_validation.rc != 0
   listen: restart rsyslog
 
-- name: RSYSLOG | Restart rsyslog
+- name: Restart rsyslog
   become: true
   become_user: root
   ansible.builtin.systemd_service:
