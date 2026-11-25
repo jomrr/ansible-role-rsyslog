@@ -12,6 +12,13 @@ include <abstractions/ssl_certs>
 {% endif %}
 {% endif %}
 {% for path in __rsyslog_file_inputs | map(attribute='path') | unique(case_sensitive=true) %}
-"{{ (path | dirname).rstrip('/') }}/" r,
-"{{ path }}" r,
+{# imfile globs match within a component. AppArmor's double star would also match subdirectories. #}
+{% set parts = path.split('/') | map('regex_replace', '[*]+', '*') | map('regex_replace', '\\[[!^](-?)', '[^\\1/') | list %}
+{% for part in parts[1:] %}
+{% set directory = parts[:loop.index] | join('/') %}
+{% if loop.last or (directory ~ '/' ~ part) is search('[*?\\[]') %}
+"{{ directory }}/" r,
+{% endif %}
+{% endfor %}
+"{{ parts | join('/') }}" r,
 {% endfor %}

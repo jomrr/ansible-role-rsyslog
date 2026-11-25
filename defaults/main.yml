@@ -43,15 +43,15 @@ rsyslog_min_severity: info
 # Disk budget for the forwarding action queue in rsyslog size units.
 rsyslog_queue_max_disk_space: 256m
 
-# Platform-specific text log paths selected in inventory.
+# Platform-specific text log paths or glob patterns selected in inventory.
 rsyslog_platform_files: []
 # rsyslog_platform_files:
 #   - /var/log/dpkg.log
 
-# Additional text logs specified as paths or mappings with path, tag and facility.
+# Additional text log paths or glob patterns with optional tag and facility.
 rsyslog_additional_files: []
 # rsyslog_additional_files:
 #   - /var/log/myapp/events.log
-#   - path: /var/log/myapp/access.log
-#     tag: myapp-access
+#   - path: /var/log/sssd/*.log
+#     tag: sssd
 #     facility: local1

@@ -230,10 +230,20 @@
     rsyslog_platform_files: [/var/log/molecule-platform.log]
     rsyslog_additional_files:
       - /var/log/molecule-extra.log
-      - path: /var/log/molecule-app.log
-        tag: myapp
+      - path: /var/log/sssd/*.log
+        tag: sssd
         facility: local3
+      - path: '/var/log/ss?d/worker[!a-z].out'
+        tag: worker
   pre_tasks:
+    - name: Create the log directory for the file patterns
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: /var/log/sssd
+        state: directory
+        mode: '0755'
+
     - name: Take the TCP collector offline
       become: true
       become_user: root
@@ -275,10 +285,10 @@
       become: true
       become_user: root
       ansible.builtin.copy:
-        dest: "/var/log/molecule-{{ __rsyslog_source }}.log"
+        dest: "/var/log/{{ __rsyslog_source }}"
         content: "probe-{{ __rsyslog_source }}\n"
         mode: '0644'
-      loop: [platform, extra, app]
+      loop: [molecule-platform.log, molecule-extra.log, sssd/domain-one.log, sssd/pam.log, sssd/worker1.out, sssd/workera.out]
       loop_control:
         loop_var: __rsyslog_source
         label: "{{ __rsyslog_source }}"
@@ -333,12 +343,23 @@
     - name: Verify octet-counted TCP records with default and custom file metadata
       ansible.builtin.wait_for:
         path: /var/log/molecule-collector-tcp
-        search_regex: '(?m)^[0-9]+ <{{ __rsyslog_probe.pri }}>1 \S+ \S+ {{ __rsyslog_probe.tag }} - - - probe-{{ __rsyslog_probe.source }}$'
+        search_regex: >-
+          (?m)^[0-9]+ <{{ __rsyslog_probe.pri }}>1 \S+ \S+ {{ __rsyslog_probe.tag }} - - -
+          probe-{{ __rsyslog_probe.source | regex_escape }}$
         timeout: 45
       loop:
-        - { source: platform, tag: 'molecule-platform\.log', pri: 134 }
-        - { source: extra, tag: 'molecule-extra\.log', pri: 134 }
-        - { source: app, tag: myapp, pri: 158 }
+        - { source: molecule-platform.log, tag: 'molecule-platform\.log', pri: 134 }
+        - { source: molecule-extra.log, tag: 'molecule-extra\.log', pri: 134 }
+        - { source: sssd/domain-one.log, tag: sssd, pri: 158 }
+        - { source: sssd/pam.log, tag: sssd, pri: 158 }
+        - { source: sssd/worker1.out, tag: worker, pri: 134 }
       loop_control:
         loop_var: __rsyslog_probe
         label: "{{ __rsyslog_probe.source }}"
+
+    - name: Verify the nonmatching file stayed local
+      ansible.builtin.command:
+        argv: [grep, -F, probe-sssd/workera.out, /var/log/molecule-collector-tcp]
+      register: __rsyslog_unmatched
+      changed_when: false
+      failed_when: __rsyslog_unmatched.rc != 1

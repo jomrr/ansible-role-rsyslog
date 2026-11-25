@@ -99,12 +99,13 @@ argument_specs:
         elements: path
         default: []
         description:
-          - Paths to active platform logs selected in inventory, such as /var/log/dpkg.log.
+          - Absolute paths or glob patterns for active platform logs, such as /var/log/dpkg.log.
       rsyslog_additional_files:
         type: list
         elements: raw
         default: []
         description:
-          - Each entry is an absolute text file path or a mapping with a required path and
-            optional tag and facility. Defaults are the file basename and local0. The first
-            mapping for a path takes precedence over plain path entries.
+          - Each entry is an absolute path or glob pattern, or a mapping with a required
+            path and optional tag and facility. All matches share the configured tag and
+            facility. The defaults are the basename of the configured path or pattern and
+            local0. The first mapping for a path takes precedence over plain path entries.

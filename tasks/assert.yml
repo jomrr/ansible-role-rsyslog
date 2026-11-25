@@ -41,13 +41,13 @@
         that:
           - __rsyslog_input.keys() | difference(['path', 'tag', 'facility']) | length == 0
           - __rsyslog_input.path is defined and __rsyslog_input.path is string
-          - __rsyslog_input.path is match('^/([-A-Za-z0-9_.+]+/)*[-A-Za-z0-9_.+]+\Z')
+          - __rsyslog_input.path is match('^(?:/(?:[-A-Za-z0-9_.+*?]|\[[!^]?[-A-Za-z0-9_.+]+\])+)+\Z')
           - __rsyslog_input.tag is undefined or (__rsyslog_input.tag is string and __rsyslog_input.tag is match('^[-A-Za-z0-9_.+]+:?\Z'))
           - >-
             __rsyslog_input.facility is undefined or __rsyslog_input.facility in
             ['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr', 'news', 'uucp', 'cron', 'authpriv', 'ftp',
              'local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7']
-        fail_msg: Supply an absolute text file path and, optionally, a syslog tag and facility.
+        fail_msg: Supply an absolute text log path or glob and, optionally, a syslog tag and facility.
         quiet: true
       loop: "{{ __rsyslog_file_inputs }}"
       loop_control:

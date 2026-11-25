@@ -212,7 +212,8 @@ rsyslog_queue_max_disk_space: 256m
 
 Type: `list`. Required: `false`.
 
-Paths to active platform logs selected in inventory, such as /var/log/dpkg.log.
+Absolute paths or glob patterns for active platform logs, such as
+/var/log/dpkg.log.
 
 Default:
 
@@ -224,9 +225,10 @@ rsyslog_platform_files: []
 
 Type: `list`. Required: `false`.
 
-Each entry is an absolute text file path or a mapping with a required path and
-optional tag and facility. Defaults are the file basename and local0. The first
-mapping for a path takes precedence over plain path entries.
+Each entry is an absolute path or glob pattern, or a mapping with a required
+path and optional tag and facility. All matches share the configured tag and
+facility. The defaults are the basename of the configured path or pattern and
+local0. The first mapping for a path takes precedence over plain path entries.
 
 Default:
 
@@ -288,6 +290,9 @@ place.
   logs, list the active files in rsyslog_platform_files for the relevant
   inventory group. imfile assigns severity info; a threshold of notice or higher
   urgency omits file records.
+- imfile matches `*`, `?` and bracket expressions such as `[0-9]` or `[!ab]` in
+  directory and file names. Set a tag on the pattern to give every matching file
+  the same sender tag. For example, `/var/log/sssd/*.log` can use `sssd`.
 - Select newline-delimited text files readable by the service. SELinux may deny
   reads by syslogd_t for nonstandard paths or labels. Check recent audit denials
   on the sender with `ausearch -m avc -ts recent | grep rsyslog`.
@@ -360,8 +365,8 @@ place.
       rsyslog_queue_max_disk_space: 512m
       rsyslog_additional_files:
         - /var/log/myapp/events.log
-        - path: /var/log/myapp/access.log
-          tag: myapp-access
+        - path: /var/log/sssd/*.log
+          tag: sssd
           facility: local1
 ```
 
