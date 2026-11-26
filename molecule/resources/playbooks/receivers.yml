@@ -31,6 +31,37 @@
       RedHat: /etc/pki/ca-trust/source/anchors
       Suse: /etc/pki/trust/anchors
   tasks:
+    - name: Write historical log files before the sender is installed
+      become: true
+      become_user: root
+      ansible.builtin.copy:
+        dest: "/var/log/molecule-time-{{ __rsyslog_fixture.name }}"
+        content: "{{ __rsyslog_fixture.lines }}\n"
+        mode: '0644'
+      loop:
+        - name: access
+          lines: '192.0.2.4 - - [26/Nov/2020:17:03:35 +0100] "GET /old HTTP/1.1" 200 15'
+        - name: apache
+          lines: '[Thu Nov 26 15:22:56.738453 2020] [core:error] archived apache'
+        - name: nginx
+          lines: |-
+            2020/07/15 16:59:41 archived summer
+            2020/11/26 16:59:41 archived winter
+            2020/10/25 02:30:00 archived overlap
+            2020/03/29 02:30:00 archived gap
+            2020/02/31 10:01:00 archived invalid date
+        - name: json
+          lines: |-
+            {"other":"2030-01-01T00:00:00Z","@timestamp":"2020-04-05T01:02:03.123456789-0400","msg":"archived json"}
+            {"other":"2020-01-01T00:00:00Z","msg":"missing field"}
+        - name: sssd
+          lines: 'worker (2020-11-26 10:00:00:123456) archived sssd'
+        - name: plain
+          lines: '2020-11-26T12:00:00Z archived plain'
+      loop_control:
+        loop_var: __rsyslog_fixture
+        label: "{{ __rsyslog_fixture.name }}"
+
     - name: Resolve the test receiver to its IPv4 loopback listener
       become: true
       become_user: root

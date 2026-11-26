@@ -52,6 +52,8 @@
       needed: "{{ __rsyslog_journal_dropin }}"
     - path: /etc/rsyslog.d/01-central.conf
       needed: "{{ __rsyslog_forwarding }}"
+    - path: /etc/rsyslog.d/central-timezones.json
+      needed: "{{ __rsyslog_forwarding and __rsyslog_timestamp_zones | length > 0 }}"
     - path: /etc/apparmor.d/rsyslog.d/central-forwarding
       needed: "{{ __rsyslog_forwarding }}"
     - path: /usr/local/sbin/rsyslog-validate-snippet

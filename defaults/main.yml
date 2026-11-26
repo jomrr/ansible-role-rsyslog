@@ -64,10 +64,11 @@ rsyslog_platform_files: []
 # rsyslog_platform_files:
 #   - /var/log/dpkg.log
 
-# Additional text log paths or glob patterns with optional tag and facility.
+# Additional text log paths or glob patterns with optional metadata and event timestamp.
 rsyslog_additional_files: []
 # rsyslog_additional_files:
 #   - /var/log/myapp/events.log
 #   - path: /var/log/sssd/*.log
 #     tag: sssd
 #     facility: local1
+#     timestamp: { format: sssd, timezone: Europe/Berlin }

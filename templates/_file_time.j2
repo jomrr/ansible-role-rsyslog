@@ -1,0 +1,44 @@
+{% set spec = input.timestamp %}
+ruleset(name="{{ ruleset }}") {
+{% if spec.field is defined %}
+    if parse_json($msg, "\$.record") == 0 then set $.stamp = $.record!{{ spec.field }};
+{% else %}
+    set $.stamp = re_extract($msg, {{ spec.regex | default(__rsyslog_timestamp_locations[spec.format]) | to_json(ensure_ascii=false) | replace('$', '\\$') }}, 0, 1, "");
+{% endif %}
+{% if spec.format in ['access', 'apache_error'] %}
+{% if spec.format == 'access' %}
+    if re_match($.stamp, '^[0-9]{2}/[A-Za-z]{3}/[0-9]{4}:[0-9:]{8} [+-][0-9]{4}$') then {
+        set $.month = substring($.stamp, 3, 3);
+        set $.day = substring($.stamp, 0, 2);
+        set $.year = substring($.stamp, 7, 4);
+        set $.clock = substring($.stamp, 12, 8) & substring($.stamp, 21, 3) & ":" & substring($.stamp, 24, 2);
+{% else %}
+    if re_match($.stamp, '^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) [A-Za-z]{3} [ ]?[0-9]{1,2} [0-9:]{8}([.][0-9]+)? [0-9]{4}$') then {
+        set $.stamp = replace($.stamp, "  ", " ");
+        set $.month = field($.stamp, 32, 2);
+        set $.day = field($.stamp, 32, 3);
+        if strlen($.day) == 1 then set $.day = "0" & $.day;
+        set $.clock = field($.stamp, 32, 4);
+        set $.year = field($.stamp, 32, 5);
+{% endif %}
+{% for month in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] %}
+        {{ 'else ' if not loop.first }}if $.month == "{{ month }}" then set $.month = "{{ '%02d' | format(loop.index) }}";
+{% endfor %}
+        set $.iso = $.year & "-" & $.month & "-" & $.day & "T" & $.clock;
+    }
+{% elif spec.format == 'nginx_error' %}
+    if re_match($.stamp, '^[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9:]{8}$') then set $.iso = replace(replace($.stamp, "/", "-"), " ", "T");
+{% elif spec.format == 'sssd' %}
+    if re_match($.stamp, '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}(:[0-9]+)?$') then
+        set $.iso = replace(substring($.stamp, 0, 19), " ", "T") & replace(substring($.stamp, 19, strlen($.stamp)), ":", ".");
+{% else %}
+    set $.iso = replace(replace($.stamp, "t", "T"), "z", "Z");
+    set $.iso = replace(replace($.iso, " ", "T"), ",", ".");
+    if re_match($.iso, '[+-][0-9]{4}$') then
+        set $.iso = substring($.iso, 0, strlen($.iso) - 2) & ":" & substring($.iso, strlen($.iso) - 2, 2);
+    else if re_match($.iso, 'T.*[+-][0-9]{2}$') then set $.iso = $.iso & ":00";
+{% endif %}
+    set $.zone = "{{ 'Z' if spec.timezone | default('UTC') == 'UTC' else spec.timezone }}";
+    call central_event_time
+    call central_forward
+}

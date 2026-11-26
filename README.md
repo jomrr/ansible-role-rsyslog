@@ -291,9 +291,14 @@ rsyslog_platform_files: []
 Type: `list`. Required: `false`.
 
 Each entry is an absolute path or glob pattern, or a mapping with a required
-path and optional tag and facility. All matches share the configured tag and
-facility. The defaults are the basename of the configured path or pattern and
-local0. The first mapping for a path takes precedence over plain path entries.
+path and optional tag, facility and timestamp. All matches share the configured
+tag and facility. The defaults are the basename of the configured path or
+pattern and local0. The first mapping for a path takes precedence over plain
+path entries.
+timestamp.format selects access, apache_error, nginx_error, sssd or iso8601.
+Optional regex selects capture group 1 of a POSIX extended expression, or field
+selects a top-level JSON key. timezone defaults to UTC for timestamps without an
+offset. Unparseable records retain the imfile read time.
 
 Default:
 
@@ -305,6 +310,7 @@ rsyslog_additional_files: []
 
 - `/etc/rsyslog.d/00-imjournal.conf`
 - `/etc/rsyslog.d/01-central.conf`
+- `/etc/rsyslog.d/central-timezones.json`
 - `/etc/apparmor.d/rsyslog.d/central-forwarding`
 - `/usr/local/sbin/rsyslog-validate-snippet`
 
@@ -369,6 +375,24 @@ place.
 - imfile matches `*`, `?` and bracket expressions such as `[0-9]` or `[!ab]` in
   directory and file names. Set a tag on the pattern to give every matching file
   the same sender tag. For example, `/var/log/sssd/*.log` can use `sssd`.
+- Set an input's timestamp.format to access (Apache or nginx), apache_error,
+  nginx_error, sssd or iso8601 to put the event time in the RFC 5424 header. The
+  message body retains the original line. The standard log layouts work
+  directly. For a different location, set timestamp.regex to a POSIX extended
+  expression whose first capture group contains the entire timestamp, or set
+  timestamp.field to a top-level JSON key such as @timestamp. Each file must
+  contain one event per line.
+- An offset in the line takes precedence. For timestamps without one,
+  timestamp.timezone accepts UTC (default), a signed offset such as +05:30 or an
+  IANA name such as Europe/Berlin. For named zones, the Ansible controller needs
+  tzdata and zdump with -i support. Run the role again after a timezone database
+  update. During the repeated autumn hour the earlier instant is used.
+  Nonexistent local times, invalid dates, missing fields and unconfigured inputs
+  use the imfile read time. RFC 5424 carries up to six fractional digits.
+- Enabling or removing the last timestamp parser switches the forwarding spool.
+  Pending records drain with their original header format. During a switch with
+  a backlog, both spools can use disk space up to rsyslog_queue_max_disk_space
+  each.
 - Select newline-delimited text files readable by the service. SELinux may deny
   reads by syslogd_t for nonstandard paths or labels. Check recent audit denials
   on the sender with `ausearch -m avc -ts recent | grep rsyslog`.
@@ -448,6 +472,11 @@ place.
         - path: /var/log/sssd/*.log
           tag: sssd
           facility: local1
+          timestamp: { format: sssd, timezone: Europe/Berlin }
+        - path: /var/log/nginx/access.log
+          timestamp: { format: access }
+        - path: /var/log/myapp/events.jsonl
+          timestamp: { format: iso8601, field: '@timestamp' }
 ```
 
 ## References

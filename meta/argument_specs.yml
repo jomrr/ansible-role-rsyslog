@@ -137,6 +137,10 @@ argument_specs:
         default: []
         description:
           - Each entry is an absolute path or glob pattern, or a mapping with a required
-            path and optional tag and facility. All matches share the configured tag and
-            facility. The defaults are the basename of the configured path or pattern and
-            local0. The first mapping for a path takes precedence over plain path entries.
+            path and optional tag, facility and timestamp. All matches share the configured
+            tag and facility. The defaults are the basename of the configured path or pattern
+            and local0. The first mapping for a path takes precedence over plain path entries.
+          - timestamp.format selects access, apache_error, nginx_error, sssd or iso8601.
+            Optional regex selects capture group 1 of a POSIX extended expression, or field
+            selects a top-level JSON key. timezone defaults to UTC for timestamps without
+            an offset. Unparseable records retain the imfile read time.

@@ -1,0 +1,37 @@
+template(name="central_original_time" type="string" string="%timereported:::date-rfc3339%")
+{% if __rsyslog_timestamp_zones %}
+lookup_table(name="central_zones" file="/etc/rsyslog.d/central-timezones.json")
+{% endif %}
+
+ruleset(name="central_event_time") {
+    if re_match($.iso, '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])?$') then {
+        set $.civil = substring($.iso, 0, 19);
+        set $.epoch = parse_time($.civil & "Z");
+        # parse_time normalises invalid dates such as February 31.
+        if script_error() == 0 and format_time($.epoch, "date-rfc3339") == ($.civil & "Z") then {
+            set $.fraction = re_extract($.iso, '[.][0-9]{1,6}', 0, 0, "");
+            set $.suffix = re_extract($.iso, '(Z|[+-][0-9]{2}:[0-9]{2})$', 0, 0, "");
+            if $.suffix == "" then set $.suffix = $.zone;
+{% if __rsyslog_timestamp_zones %}
+            if $.suffix != "Z" and not ($.suffix startswith "+") and not ($.suffix startswith "-") then {
+                set $.year = cnum(substring($.civil, 0, 4));
+                if $.year >= 2800 then set $.year = 2400 + ($.year % 400);
+                set $.spans_text = lookup("central_zones", $.suffix & "/" & cstr($.year));
+                if $.spans_text == "" then set $.spans_text = lookup("central_zones", $.suffix);
+                set $.suffix = "";
+                if parse_json($.spans_text, "\$.spans") == 0 then {
+                    set $.local_key = cnum(replace(replace(replace(substring($.civil, 5, 14), "-", ""), "T", ""), ":", ""));
+                    foreach ($.span in $.spans) do {
+                        if $.local_key >= $.span!at then set $.offset = $.span!offset;
+                    }
+                    if cstr($.offset) != "gap" then {
+                        set $.civil = substring(format_time($.epoch - cnum($.offset), "date-rfc3339"), 0, 19);
+                        set $.suffix = "Z";
+                    }
+                }
+            }
+{% endif %}
+            if $.suffix != "" then set $.event_time = $.civil & $.fraction & $.suffix;
+        }
+    }
+}

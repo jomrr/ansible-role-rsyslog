@@ -257,6 +257,17 @@
         facility: local3
       - path: '/var/log/ss?d/worker[!a-z].out'
         tag: worker
+      - path: /var/log/molecule-time-access
+        timestamp: { format: access }
+      - path: /var/log/molecule-time-apache
+        timestamp: { format: apache_error, timezone: '+05:30' }
+      - path: /var/log/molecule-time-nginx
+        timestamp: { format: nginx_error, timezone: Europe/Berlin }
+      - path: /var/log/molecule-time-json
+        timestamp: { format: iso8601, field: '@timestamp', timezone: Europe/Berlin }
+      - path: /var/log/molecule-time-sssd
+        timestamp: { format: sssd, regex: '^worker \(([^)]+)\)' }
+      - /var/log/molecule-time-plain
   pre_tasks:
     - name: Create the log directory for the file patterns
       become: true
@@ -326,12 +337,21 @@
         name: rsyslog.service
         state: stopped
 
-    - name: Remove a consumed input so only the saved queue can deliver its record
+    - name: Remove consumed inputs so only the saved queue can deliver their records
       become: true
       become_user: root
       ansible.builtin.file:
-        path: /var/log/molecule-extra.log
+        path: "/var/log/{{ __rsyslog_consumed }}"
         state: absent
+      loop: [molecule-extra.log, molecule-time-nginx]
+      loop_control:
+        loop_var: __rsyslog_consumed
+
+    - name: Record the end of the offline reading interval
+      ansible.builtin.command: date +%s
+      register: __rsyslog_read_end
+      changed_when: false
+      failed_when: __rsyslog_read_end.rc != 0
 
     - name: Bring the TCP collector back online
       become: true
@@ -361,6 +381,49 @@
       until: "'timer:(keepalive,' in __rsyslog_tcp_socket.stdout"
       retries: 10
       delay: 1
+
+    - name: Verify historical file times in the collector's RFC 5424 headers after queue replay
+      ansible.builtin.wait_for:
+        path: /var/log/molecule-collector-tcp
+        search_regex: >-
+          (?m)^[0-9]+ <134>1 {{ __rsyslog_record.time | regex_escape }} \S+ molecule-time-{{ __rsyslog_record.source }}
+          - - - .*{{ __rsyslog_record.tail | regex_escape }}$
+        timeout: 45
+      loop:
+        - { source: access, time: '2020-11-26T17:03:35+01:00', tail: '"GET /old HTTP/1.1" 200 15' }
+        - { source: apache, time: '2020-11-26T15:22:56.738453+05:30', tail: archived apache }
+        - { source: nginx, time: '2020-07-15T14:59:41Z', tail: archived summer }
+        - { source: nginx, time: '2020-11-26T15:59:41Z', tail: archived winter }
+        - { source: nginx, time: '2020-10-25T00:30:00Z', tail: archived overlap }
+        - { source: json, time: '2020-04-05T01:02:03.123456-04:00', tail: '"archived json"}' }
+        - { source: sssd, time: '2020-11-26T10:00:00.123456Z', tail: archived sssd }
+      loop_control:
+        loop_var: __rsyslog_record
+        label: "{{ __rsyslog_record.tail }}"
+
+    - name: Collect the wire timestamps for unreadable and unconfigured inputs
+      ansible.builtin.wait_for:
+        path: /var/log/molecule-collector-tcp
+        search_regex: >-
+          (?m)^[0-9]+ <134>1 (?P<read_time>\S+) \S+ molecule-time-\S+ - - - .*{{ __rsyslog_tail | regex_escape }}$
+        timeout: 45
+      register: __rsyslog_read_records
+      loop: [archived gap, archived invalid date, '"missing field"}', archived plain]
+      loop_control:
+        loop_var: __rsyslog_tail
+
+    - name: Verify fallback timestamps fall within the offline reading interval
+      ansible.builtin.command:
+        argv: [date, --date, "{{ __rsyslog_record.match_groupdict.read_time }}", '+%s']
+      register: __rsyslog_read_time
+      changed_when: false
+      failed_when: >-
+        __rsyslog_read_time.rc != 0 or
+        not (ansible_facts.date_time.epoch | int <= __rsyslog_read_time.stdout | int <= __rsyslog_read_end.stdout | int)
+      loop: "{{ __rsyslog_read_records.results }}"
+      loop_control:
+        loop_var: __rsyslog_record
+        label: "{{ __rsyslog_record.match_groupdict.read_time }}"
 
     - name: Verify the excluded Loki record is still in the local journal
       become: true

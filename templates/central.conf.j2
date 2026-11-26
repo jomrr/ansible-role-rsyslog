@@ -14,31 +14,52 @@ module(load="imjournal" StateFile="{{ __rsyslog_state_directory }}/imjournal.sta
 {% if __rsyslog_file_inputs %}
 module(load="imfile" statefile.directory="{{ __rsyslog_state_directory }}")
 {% endif %}
+{% if __rsyslog_timestamp_inputs %}
+{% include '_event_time.j2' %}
+{% endif %}
 
+template(name="central_protocol" type="string"
+         string="<%PRI%>1 %$!central_timestamp% %HOSTNAME% %APP-NAME% %PROCID% %MSGID% %STRUCTURED-DATA% %msg%\n")
+
+# Each spool keeps its wire template when timestamp extraction is enabled or removed.
+# New messages enter only the active spool. Pending messages in the other one can drain.
+{% for event_time in [false, true] %}
+ruleset(name="central_send_{{ 'event' if event_time else 'original' }}") {
+    action(type="omfwd" target="{{ rsyslog_server }}" port="{{ rsyslog_port }}" protocol="tcp"
+           template="{{ 'central_protocol' if event_time else 'RSYSLOG_SyslogProtocol23Format' }}" TCP_Framing="octet-counted"
+{% if rsyslog_keepalive | bool %}
+           KeepAlive="on" KeepAlive.Time="{{ rsyslog_keepalive_time | int }}"
+           KeepAlive.Interval="{{ rsyslog_keepalive_interval | int }}" KeepAlive.Probes="{{ rsyslog_keepalive_probes | int }}"
+{% endif %}
+{% if rsyslog_transport == 'tls' %}
+           StreamDriver="gtls" StreamDriverMode="1" StreamDriverAuthMode="x509/name"
+           StreamDriverPermittedPeers="{{ rsyslog_permitted_peers | join(',') }}"
+           StreamDriver.CAFile="{{ rsyslog_ca_file | default(__rsyslog_ca_bundle, true) }}"
+{% if rsyslog_client_cert_file %}
+           StreamDriver.CertFile="{{ rsyslog_client_cert_file }}"
+           StreamDriver.KeyFile="{{ rsyslog_client_key_file }}"
+{% endif %}
+{% endif %}
+           action.resumeRetryCount="-1" queue.type="LinkedList" queue.filename="{{ 'forward-event' if event_time else 'forward' }}"
+           queue.spoolDirectory="{{ __rsyslog_state_directory }}"
+           queue.maxDiskSpace="{{ rsyslog_queue_max_disk_space }}" queue.saveOnShutdown="on")
+}
+
+{% endfor %}
 ruleset(name="central_forward") {
     if prifilt("*.{{ rsyslog_min_severity }}")
 {% if rsyslog_excluded_programs %}
        and not ($programname == {{ rsyslog_excluded_programs | to_json(ensure_ascii=false) | replace('$', '\\$') }})
 {% endif %}
-    then
-        action(type="omfwd" target="{{ rsyslog_server }}" port="{{ rsyslog_port }}" protocol="tcp"
-               template="RSYSLOG_SyslogProtocol23Format" TCP_Framing="octet-counted"
-{% if rsyslog_keepalive | bool %}
-               KeepAlive="on" KeepAlive.Time="{{ rsyslog_keepalive_time | int }}"
-               KeepAlive.Interval="{{ rsyslog_keepalive_interval | int }}" KeepAlive.Probes="{{ rsyslog_keepalive_probes | int }}"
+    then {
+{% if __rsyslog_timestamp_inputs %}
+        if $.event_time == "" then set $!central_timestamp = exec_template("central_original_time");
+        else set $!central_timestamp = $.event_time;
+        call central_send_event
+{% else %}
+        call central_send_original
 {% endif %}
-{% if rsyslog_transport == 'tls' %}
-               StreamDriver="gtls" StreamDriverMode="1" StreamDriverAuthMode="x509/name"
-               StreamDriverPermittedPeers="{{ rsyslog_permitted_peers | join(',') }}"
-               StreamDriver.CAFile="{{ rsyslog_ca_file | default(__rsyslog_ca_bundle, true) }}"
-{% if rsyslog_client_cert_file %}
-               StreamDriver.CertFile="{{ rsyslog_client_cert_file }}"
-               StreamDriver.KeyFile="{{ rsyslog_client_key_file }}"
-{% endif %}
-{% endif %}
-               action.resumeRetryCount="-1" queue.type="LinkedList" queue.filename="forward"
-               queue.spoolDirectory="{{ __rsyslog_state_directory }}"
-               queue.maxDiskSpace="{{ rsyslog_queue_max_disk_space }}" queue.saveOnShutdown="on")
+    }
 }
 
 if $inputname == "imjournal" then {
@@ -54,6 +75,11 @@ if $inputname == "imjournal" then {
 {% endif %}
 
 {% for input in __rsyslog_file_inputs | unique(attribute='path', case_sensitive=true) %}
+{% set ruleset = 'central_forward' %}
+{% if input.timestamp is defined %}
+{% set ruleset = 'central_file_' ~ loop.index %}
+{% include '_file_time.j2' %}
+{% endif %}
 input(type="imfile" File="{{ input.path }}" Tag="{{ (input.tag | default(input.path | basename)).rstrip(':') }}:"
-      Facility="{{ input.facility | default('local0') }}" Severity="info" PersistStateInterval="100" Ruleset="central_forward")
+      Facility="{{ input.facility | default('local0') }}" Severity="info" PersistStateInterval="100" Ruleset="{{ ruleset }}")
 {% endfor %}
