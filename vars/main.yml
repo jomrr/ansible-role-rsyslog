@@ -25,5 +25,5 @@ __rsyslog_timestamp_locations:
   access: '\[([^]]+)\]'
   apache_error: '^\[([^]]+)\]'
   nginx_error: '^([^ ]+ [^ ]+)'
-  sssd: '^\(([^)]+)\)'
+  sssd: '^[ *]*\(([^)]+)\)'
   iso8601: '^([^ ]+)'

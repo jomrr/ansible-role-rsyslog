@@ -267,6 +267,8 @@
         timestamp: { format: iso8601, field: '@timestamp', timezone: Europe/Berlin }
       - path: /var/log/molecule-time-sssd
         timestamp: { format: sssd, regex: '^worker \(([^)]+)\)' }
+      - path: /var/log/molecule-time-sssd-default
+        timestamp: { format: sssd }
       - /var/log/molecule-time-plain
   pre_tasks:
     - name: Create the log directory for the file patterns
@@ -397,6 +399,9 @@
         - { source: nginx, time: '2020-10-25T00:30:00Z', tail: archived overlap }
         - { source: json, time: '2020-04-05T01:02:03.123456-04:00', tail: '"archived json"}' }
         - { source: sssd, time: '2020-11-26T10:00:00.123456Z', tail: archived sssd }
+        - { source: sssd-default, time: '2020-11-26T03:37:00Z', tail: archived sssd early hour }
+        - { source: sssd-default, time: '2020-11-26T09:38:01.012345Z', tail: archived sssd early microseconds }
+        - { source: sssd-default, time: '2020-11-26T13:37:00Z', tail: archived sssd backtrace }
       loop_control:
         loop_var: __rsyslog_record
         label: "{{ __rsyslog_record.tail }}"

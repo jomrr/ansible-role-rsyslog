@@ -144,3 +144,5 @@ argument_specs:
             Optional regex selects capture group 1 of a POSIX extended expression, or field
             selects a top-level JSON key. timezone defaults to UTC for timestamps without
             an offset. Unparseable records retain the imfile read time.
+          - The sssd format recognizes ordinary and asterisk-prefixed backtrace lines, including
+            space-padded single-digit hours and optional microseconds.

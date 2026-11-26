@@ -299,6 +299,8 @@ timestamp.format selects access, apache_error, nginx_error, sssd or iso8601.
 Optional regex selects capture group 1 of a POSIX extended expression, or field
 selects a top-level JSON key. timezone defaults to UTC for timestamps without an
 offset. Unparseable records retain the imfile read time.
+The sssd format recognizes ordinary and asterisk-prefixed backtrace lines,
+including space-padded single-digit hours and optional microseconds.
 
 Default:
 
@@ -382,6 +384,10 @@ place.
   expression whose first capture group contains the entire timestamp, or set
   timestamp.field to a top-level JSON key such as @timestamp. Each file must
   contain one event per line.
+- With timestamp.format set to sssd, the default regex reads both ordinary log
+  lines and backtrace lines marked with an asterisk. It accepts the space SSSD
+  uses to pad hours before 10:00 and preserves microseconds when
+  debug_microseconds is enabled.
 - An offset in the line takes precedence. For timestamps without one,
   timestamp.timezone accepts UTC (default), a signed offset such as +05:30 or an
   IANA name such as Europe/Berlin. For named zones, the Ansible controller needs
